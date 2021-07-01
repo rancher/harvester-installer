@@ -1,3 +1,0 @@
-rc_need="!net !net-online"
-rc_after="ccapply"
-rc_want="network-online"

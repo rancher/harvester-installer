@@ -1,9 +1,0 @@
-#!/sbin/openrc-run
-
-depend() {
-    want network-online
-}
-
-name="ccapply"
-command="/k3os/system/k3os/current/k3os"
-command_args="config"

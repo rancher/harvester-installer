@@ -16,7 +16,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/jroimartin/gocui"
 	"github.com/pkg/errors"
-	k3os "github.com/rancher/k3os/pkg/config"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/http/httpproxy"
@@ -183,56 +182,6 @@ func getConfigureNetworkCMD(network config.Network) string {
 	return fmt.Sprintf("/sbin/harvester-configure-network %s %s", network.Interface, networkMethodDHCP)
 }
 
-func toCloudConfig(cfg *config.HarvesterConfig) (*k3os.CloudConfig, error) {
-	cloudConfig, err := config.ConvertToK3OS(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// remove the /dev/loop directory as the workaround for https://github.com/harvester/harvester/issues/665
-	cloudConfig.Runcmd = append(cloudConfig.Runcmd, "rm -rf /dev/loop")
-
-	for _, network := range cfg.Install.Networks {
-		if network.Method == networkMethodStatic {
-			cloudConfig.Runcmd = append(cloudConfig.Runcmd, getConfigureNetworkCMD(network))
-		}
-	}
-
-	// k3os & k3s
-	cloudConfig.K3OS.Labels = map[string]string{
-		"harvesterhci.io/managed": "true",
-	}
-
-	var extraK3sArgs []string
-	if cfg.Install.MgmtInterface != "" {
-		extraK3sArgs = []string{"--flannel-iface", cfg.Install.MgmtInterface}
-	}
-
-	if cfg.Install.Mode == modeJoin {
-		cloudConfig.K3OS.K3sArgs = append([]string{"agent"}, extraK3sArgs...)
-		return cloudConfig, nil
-	}
-
-	cloudConfig.K3OS.K3sArgs = append([]string{
-		"server",
-		"--cluster-init",
-		"--disable",
-		"local-storage",
-		"--disable",
-		"servicelb",
-		"--disable",
-		"traefik",
-		"--cluster-cidr",
-		"10.52.0.0/16",
-		"--service-cidr",
-		"10.53.0.0/16",
-		"--cluster-dns",
-		"10.53.0.10",
-	}, extraK3sArgs...)
-
-	return cloudConfig, nil
-}
-
 func execute(g *gocui.Gui, env []string, cmdName string) error {
 	cmd := exec.Command(cmdName)
 	cmd.Env = env
@@ -261,7 +210,7 @@ func execute(g *gocui.Gui, env []string, cmdName string) error {
 	return cmd.Wait()
 }
 
-func doInstall(g *gocui.Gui, cloudConfig *k3os.CloudConfig, webhooks RendererWebhooks) error {
+func doInstall(g *gocui.Gui, config interface{}, webhooks RendererWebhooks) error {
 	webhooks.Handle(EventInstallStarted)
 
 	var (
@@ -269,21 +218,14 @@ func doInstall(g *gocui.Gui, cloudConfig *k3os.CloudConfig, webhooks RendererWeb
 		tempFile *os.File
 	)
 
-	tempFile, err = ioutil.TempFile("/tmp", "k3os.XXXXXXXX")
+	tempFile, err = ioutil.TempFile("/tmp", "cos.XXXXXXXX")
 	if err != nil {
 		return err
 	}
 	defer tempFile.Close()
 
-	cloudConfig.K3OS.Install.ConfigURL = tempFile.Name()
-
-	ev, err := k3os.ToEnv(*cloudConfig)
-	if err != nil {
-		return err
-	}
 	if tempFile != nil {
-		cloudConfig.K3OS.Install = nil
-		bytes, err := yaml.Marshal(cloudConfig)
+		bytes, err := yaml.Marshal(config)
 		if err != nil {
 			return err
 		}
@@ -296,15 +238,11 @@ func doInstall(g *gocui.Gui, cloudConfig *k3os.CloudConfig, webhooks RendererWeb
 		defer os.Remove(tempFile.Name())
 	}
 
-	env := append(os.Environ(), ev...)
-	if err := execute(g, env, "/usr/libexec/k3os/install"); err != nil {
-		webhooks.Handle(EventInstallFailed)
-		return err
-	}
+	// install
+
 	webhooks.Handle(EventInstallSuceeded)
-	if err := execute(g, env, "/usr/libexec/k3os/shutdown"); err != nil {
-		return err
-	}
+	// shutdown
+
 	return nil
 }
 

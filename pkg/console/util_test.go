@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/harvester/harvester-installer/pkg/config"
 	"github.com/harvester/harvester-installer/pkg/util"
 )
 
@@ -135,39 +134,5 @@ func TestGetServerURLFromEnvData(t *testing.T) {
 		url, err := getServerURLFromEnvData(testCase.input)
 		assert.Equal(t, testCase.url, url)
 		assert.Equal(t, testCase.err, err)
-	}
-}
-
-func TestToCloudConfig(t *testing.T) {
-	testCases := []struct {
-		name       string
-		file       string
-		resultFile string
-	}{
-		{
-			name:       "convert create config",
-			file:       "create.yaml",
-			resultFile: "create-cc.yaml",
-		},
-		{
-			name:       "convert join config",
-			file:       "join.yaml",
-			resultFile: "join-cc.yaml",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			cfg, err := config.LoadHarvesterConfig(util.LoadFixture(t, testCase.file))
-			if err != nil {
-				t.Fatalf("fail to load %q", testCase.file)
-			}
-			expected, err := util.LoadCloudConfig(util.LoadFixture(t, testCase.resultFile))
-			if err != nil {
-				t.Fatalf("fail to load %q", testCase.resultFile)
-			}
-			cloudConfig, err := toCloudConfig(cfg)
-			assert.Equal(t, expected, cloudConfig)
-			assert.Equal(t, nil, err)
-		})
 	}
 }

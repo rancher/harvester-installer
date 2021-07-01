@@ -1,6 +1,0 @@
-#!/bin/bash
-
-source $SCRIPTS/live
-
-pinfo Dropping to shell
-exec bash

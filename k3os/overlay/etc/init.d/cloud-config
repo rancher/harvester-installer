@@ -1,9 +1,0 @@
-#!/sbin/openrc-run
-
-depend() {
-    want network-online
-    before ccapply
-}
-
-name="cloud-config"
-command="/usr/sbin/metadata"
