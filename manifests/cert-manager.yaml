@@ -9,7 +9,8 @@ metadata:
   name: cert-manager
   namespace: kube-system
 spec:
-  chart: https://%{KUBERNETES_API}%/static/charts/$CERT_MANAGER_CHART
+  bootstrap: true
+  chart: https://localhost:9345/static/charts/$CERT_MANAGER_CHART
   targetNamespace: cert-manager
   set:
     installCRDs: "true"

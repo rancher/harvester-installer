@@ -9,11 +9,12 @@ metadata:
   name: harvester
   namespace: kube-system
 spec:
-  chart: https://%{KUBERNETES_API}%/static/charts/$HARVESTER_CHART
+  bootstrap: true
+  chart: https://localhost:9345/static/charts/$HARVESTER_CHART
   targetNamespace: harvester-system
   set:
     containers.apiserver.authMode: "rancher"
-    multus.enabled: "true"
+    multus.enabled: "false"
     longhorn.enabled: "true"
     longhorn.defaultSettings.taintToleration: "kubevirt.io/drain:NoSchedule"
     containers.apiserver.image.imagePullPolicy: "IfNotPresent"

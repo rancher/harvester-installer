@@ -9,7 +9,8 @@ metadata:
   name: rancher
   namespace: kube-system
 spec:
-  chart: https://%{KUBERNETES_API}%/static/charts/$RANCHER_CHART
+  bootstrap: true
+  chart: https://localhost:9345/static/charts/$RANCHER_CHART
   targetNamespace: cattle-system
   set:
     ingress.enabled: "false"
