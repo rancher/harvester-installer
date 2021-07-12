@@ -70,13 +70,13 @@ func TestGetFormattedServerURL(t *testing.T) {
 		{
 			Name:   "ip",
 			input:  "1.2.3.4",
-			output: "https://1.2.3.4:6443",
+			output: "https://1.2.3.4:8443",
 			err:    nil,
 		},
 		{
 			Name:   "domain name",
 			input:  "example.org",
-			output: "https://example.org:6443",
+			output: "https://example.org:8443",
 			err:    nil,
 		},
 		{

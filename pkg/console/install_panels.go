@@ -1244,7 +1244,7 @@ func addInstallPanel(c *Console) error {
 				printToPanel(c.Gui, err.Error(), installPanel)
 				return
 			}
-			doInstall(c.Gui, cOSConfig, webhooks)
+			doInstall(c.Gui, c.config, cOSConfig, webhooks)
 		}()
 		return c.setContentByName(footerPanel, "")
 	}

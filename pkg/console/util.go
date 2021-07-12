@@ -13,21 +13,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/jroimartin/gocui"
+	yipSchema "github.com/mudler/yip/pkg/schema"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/http/httpproxy"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"github.com/harvester/harvester-installer/pkg/config"
 )
 
 const (
-	defaultHTTPTimeout = 15 * time.Second
-	harvesterNodePort  = "30443"
-	automaticCmdline   = "harvester.automatic"
+	rancherManagementPort = "8443"
+	defaultHTTPTimeout    = 15 * time.Second
+	harvesterNodePort     = "30443"
+	automaticCmdline      = "harvester.automatic"
 )
 
 func newProxyClient() http.Client {
@@ -125,7 +127,7 @@ func getFormattedServerURL(addr string) (string, error) {
 	if ipErr != nil && domainErr != nil {
 		return "", fmt.Errorf("%s is not a valid ip/domain", addr)
 	}
-	return fmt.Sprintf("https://%s:6443", addr), nil
+	return fmt.Sprintf("https://%s:%s", addr, rancherManagementPort), nil
 }
 
 func getServerURLFromEnvData(data []byte) (string, error) {
@@ -210,7 +212,7 @@ func execute(g *gocui.Gui, env []string, cmdName string) error {
 	return cmd.Wait()
 }
 
-func doInstall(g *gocui.Gui, config interface{}, webhooks RendererWebhooks) error {
+func doInstall(g *gocui.Gui, hvstConfig *config.HarvesterConfig, cosConfig *yipSchema.YipConfig, webhooks RendererWebhooks) error {
 	webhooks.Handle(EventInstallStarted)
 
 	var (
@@ -225,7 +227,7 @@ func doInstall(g *gocui.Gui, config interface{}, webhooks RendererWebhooks) erro
 	defer tempFile.Close()
 
 	if tempFile != nil {
-		bytes, err := yaml.Marshal(config)
+		bytes, err := yaml.Marshal(cosConfig)
 		if err != nil {
 			return err
 		}
@@ -238,7 +240,15 @@ func doInstall(g *gocui.Gui, config interface{}, webhooks RendererWebhooks) erro
 		defer os.Remove(tempFile.Name())
 	}
 
-	// install
+	ev := []string{
+		fmt.Sprintf("COS_INSTALL_CONFIG_URL=%s", tempFile.Name()),
+		fmt.Sprintf("COS_INSTALL_DEVICE=%s", hvstConfig.Install.Device),
+	}
+	env := append(os.Environ(), ev...)
+	if err := execute(g, env, "/usr/sbin/cos-installer"); err != nil {
+		webhooks.Handle(EventInstallFailed)
+		return err
+	}
 
 	webhooks.Handle(EventInstallSuceeded)
 	// shutdown
@@ -247,6 +257,7 @@ func doInstall(g *gocui.Gui, config interface{}, webhooks RendererWebhooks) erro
 }
 
 func doUpgrade(g *gocui.Gui) error {
+	// TODO(kiefer): to cOS upgrade method
 	cmd := exec.Command("/k3os/system/k3os/current/harvester-upgrade.sh")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
