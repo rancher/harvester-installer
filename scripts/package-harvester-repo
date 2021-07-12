@@ -1,0 +1,23 @@
+#!/bin/bash -e
+
+TOP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+SCRIPTS_DIR="${TOP_DIR}/scripts"
+PACKAGE_HARVESTER_OS_DIR="${TOP_DIR}/package/harvester-os"
+PACKAGE_HARVESTER_REPO_DIR="${TOP_DIR}/package/harvester-repo"
+IMAGES_DIR="${PACKAGE_HARVESTER_OS_DIR}/images"
+
+source ${SCRIPTS_DIR}/version
+cd ${PACKAGE_HARVESTER_REPO_DIR}
+
+CLUSTER_REPO_IMAGE=rancher/harvester-cluster-repo:${VERSION}
+docker build -t ${CLUSTER_REPO_IMAGE} .
+
+# Save the image
+cat << EOF > ${IMAGES_DIR}/harvester-repo-images.txt
+docker.io/${CLUSTER_REPO_IMAGE}
+EOF
+docker image save -o ${IMAGES_DIR}/harvester-repo-images.tar $(<${IMAGES_DIR}/harvester-repo-images.txt)
+zstd --rm ${IMAGES_DIR}/harvester-repo-images.tar -o ${IMAGES_DIR}/harvester-repo-images.tar.zst
+
+# Update image name in Rancherd bootstrap resources
+sed -i "s,\$CLUSTER_REPO_IMAGE,${CLUSTER_REPO_IMAGE}," ${PACKAGE_HARVESTER_OS_DIR}/files/usr/share/rancher/rancherd/config.yaml.d/91-harvester-bootstrap.yaml
