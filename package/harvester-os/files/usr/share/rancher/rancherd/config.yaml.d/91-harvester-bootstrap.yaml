@@ -1,0 +1,84 @@
+bootstrapResources:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: harvester-cluster-repo
+    namespace: cattle-system
+  spec:
+    selector:
+      matchLabels:
+        app: harvester-cluster-repo
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          app: harvester-cluster-repo
+      spec:
+        containers:
+        - name: httpd
+          image: $CLUSTER_REPO_IMAGE
+          ports:
+          - containerPort: 80
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: harvester-cluster-repo
+    namespace: cattle-system
+  spec:
+    selector:
+      app: harvester-cluster-repo
+    ports:
+      - protocol: TCP
+        port: 80
+        targetPort: 80
+- apiVersion: catalog.cattle.io/v1
+  kind: ClusterRepo
+  metadata:
+    name: harvester-charts
+  spec:
+    url: http://harvester-cluster-repo.cattle-system/charts
+- apiVersion: management.cattle.io/v3
+  kind: ManagedChart
+  metadata:
+    name: harvester
+    namespace: fleet-local
+  spec:
+    chart: harvester
+    defaultNamespace: harvester-system
+    repoName: harvester-charts
+    targets:
+    - clusterName: local
+      clusterSelector:
+        matchExpressions:
+        - key: provisioning.cattle.io/unmanaged-system-agent
+          operator: DoesNotExist
+    values:
+      containers:
+        apiserver:
+          authMode: "rancher"
+          image:
+            imagePullPolicy: "IfNotPresent"
+          hciMode: true
+      multus:
+        enabled: false
+      longhorn:
+        enabled: true
+        defaultSettings:
+          taintToleration: "kubevirt.io/drain:NoSchedule"
+      harvester-network-controller:
+        image:
+          pullPolicy: "IfNotPresent"
+      service:
+        harvester:
+          type: "NodePort"
+          httpsNodePort: 30443
+      rancherEmbedded: true
+      webhook:
+        image:
+          imagePullPolicy: "IfNotPresent"
+    version: $HARVESTER_CHART_VERSION
+- apiVersion: management.cattle.io/v3
+  kind: Setting
+  metadata:
+    name: system-agent-install-script
+  value: http://harvester-cluster-repo.cattle-system/system-agent/system-agent-install.sh
