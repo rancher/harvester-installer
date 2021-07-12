@@ -3,9 +3,11 @@ module github.com/harvester/harvester-installer
 go 1.16
 
 require (
+	github.com/coreos/yaml v0.0.0-20141224210557-6b16a5714269
 	github.com/ghodss/yaml v1.0.0
 	github.com/imdario/mergo v0.3.12
 	github.com/jroimartin/gocui v0.4.0
+	github.com/mudler/yip v0.0.0-20210627214129-f2533528376f
 	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/mapper v0.0.0-20190814232720-058a8b7feb99
@@ -17,7 +19,7 @@ require (
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/apimachinery v0.0.0
+	k8s.io/apimachinery v0.18.8
 )
 
 replace (

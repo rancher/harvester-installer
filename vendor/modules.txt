@@ -1,20 +1,36 @@
+# github.com/coreos/yaml v0.0.0-20141224210557-6b16a5714269
+## explicit
+github.com/coreos/yaml
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/docker/go-units v0.3.3
+# github.com/docker/go-units v0.4.0
 github.com/docker/go-units
+# github.com/elotl/cloud-init v1.14.2
+github.com/elotl/cloud-init/config
 # github.com/ghodss/yaml v1.0.0
 ## explicit
 github.com/ghodss/yaml
+# github.com/hashicorp/errwrap v1.0.0
+github.com/hashicorp/errwrap
+# github.com/hashicorp/go-multierror v1.1.0
+github.com/hashicorp/go-multierror
 # github.com/imdario/mergo v0.3.12
 ## explicit
 github.com/imdario/mergo
+# github.com/itchyny/gojq v0.12.2
+github.com/itchyny/gojq
+# github.com/itchyny/timefmt-go v0.1.2
+github.com/itchyny/timefmt-go
 # github.com/jroimartin/gocui v0.4.0
 ## explicit
 github.com/jroimartin/gocui
 # github.com/mattn/go-runewidth v0.0.9
 github.com/mattn/go-runewidth
-# github.com/mattn/go-shellwords v1.0.5
+# github.com/mattn/go-shellwords v1.0.10
 github.com/mattn/go-shellwords
+# github.com/mudler/yip v0.0.0-20210627214129-f2533528376f
+## explicit
+github.com/mudler/yip/pkg/schema
 # github.com/nsf/termbox-go v1.1.1 => github.com/Harvester/termbox-go v1.1.1-0.20210318083914-8ab92204a400
 ## explicit
 github.com/nsf/termbox-go
@@ -43,11 +59,13 @@ github.com/stretchr/testify/assert
 github.com/tredoe/osutil/user/crypt
 github.com/tredoe/osutil/user/crypt/common
 github.com/tredoe/osutil/user/crypt/sha512_crypt
+# github.com/twpayne/go-vfs v1.5.0
+github.com/twpayne/go-vfs
 # github.com/vishvananda/netlink v1.1.0
 ## explicit
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
-# github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df
+# github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f
 github.com/vishvananda/netns
 # golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
 ## explicit
@@ -79,9 +97,9 @@ golang.org/x/text/unicode/norm
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit
 gopkg.in/yaml.v2
-# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+# gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 gopkg.in/yaml.v3
-# k8s.io/apimachinery v0.0.0 => github.com/rancher/kubernetes/staging/src/k8s.io/apimachinery v1.19.3-k3s1
+# k8s.io/apimachinery v0.18.8 => github.com/rancher/kubernetes/staging/src/k8s.io/apimachinery v1.19.3-k3s1
 ## explicit
 k8s.io/apimachinery/pkg/util/errors
 k8s.io/apimachinery/pkg/util/rand
