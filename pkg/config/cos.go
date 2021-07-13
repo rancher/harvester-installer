@@ -40,36 +40,33 @@ func toYAMLFile(o interface{}, file string) error {
 	return ioutil.WriteFile(file, bytes, 0644)
 }
 
-// ConvertToCOS convert HarvesterConfig to cOS configuration.
+// ConvertToCOS converts HarvesterConfig to cOS configuration.
 func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 	cfg, err := config.DeepCopy()
 	if err != nil {
 		return nil, err
 	}
 
-	initramfs := yipSchema.Stage{}
-	fs := yipSchema.Stage{
-		SSHKeys:     make(map[string][]string),
-		Users:       make(map[string]yipSchema.User),
-		Environment: make(map[string]string),
-		Files:       make([]yipSchema.File, 0),
-		TimeSyncd:   make(map[string]string),
+	initramfs := yipSchema.Stage{
+		SSHKeys:   make(map[string][]string),
+		Users:     make(map[string]yipSchema.User),
+		TimeSyncd: make(map[string]string),
 	}
 
 	// TOP
-	if err := initRancherdStage(cfg.ServerURL, cfg.Token, &fs); err != nil {
+	if err := initRancherdStage(cfg.ServerURL, cfg.Token, &initramfs); err != nil {
 		return nil, err
 	}
 
 	// OS
-	fs.SSHKeys[CosLoginUser] = cfg.OS.SSHAuthorizedKeys
+	initramfs.SSHKeys[CosLoginUser] = cfg.OS.SSHAuthorizedKeys
 
 	for _, ff := range cfg.OS.WriteFiles {
 		perm, err := strconv.ParseUint(ff.RawFilePermissions, 8, 0)
 		if err != nil {
 			perm = 0600
 		}
-		fs.Files = append(fs.Files, yipSchema.File{
+		initramfs.Files = append(initramfs.Files, yipSchema.File{
 			Path:        ff.Path,
 			Content:     ff.Content,
 			Permissions: uint32(perm),
@@ -82,19 +79,18 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 	initramfs.Hostname = cfg.OS.Hostname
 	initramfs.Modules = cfg.OS.Modules
 	initramfs.Sysctl = cfg.OS.Sysctls
-	fs.TimeSyncd["NTP"] = strings.Join(cfg.OS.NTPServers, " ")
+	initramfs.TimeSyncd["NTP"] = strings.Join(cfg.OS.NTPServers, " ")
 	initramfs.Dns.Nameservers = cfg.OS.DNSNameservers
 
 	// TODO(kiefer): wicked WIFI? Can we improve `harvester-configure-network` script?
 	// cloudConfig.K3OS.Wifi = copyWifi(cfg.OS.Wifi)
 
 	// TODO(kiefer): suggest using hash value in the doc
-	// Not working yet: https://github.com/rancher-sandbox/cOS-toolkit/issues/397
-	fs.Users[CosLoginUser] = yipSchema.User{
+	initramfs.Users[CosLoginUser] = yipSchema.User{
 		PasswordHash: cfg.OS.Password,
 	}
 
-	fs.Environment = cfg.OS.Environment
+	initramfs.Environment = cfg.OS.Environment
 
 	// TODO(kiefer): Install
 
@@ -102,7 +98,6 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 		Name: "Harvester Configuration",
 		Stages: map[string][]yipSchema.Stage{
 			"initramfs": {initramfs},
-			"fs":        {fs},
 		},
 	}
 
