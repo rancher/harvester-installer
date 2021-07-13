@@ -12,11 +12,11 @@ BASE_OS_IMAGE="bk201z/os2:efe5eb4"
 HARVESTER_OS_IMAGE=rancher/harvester-os:$VERSION
 
 cd ${PACKAGE_HARVESTER_OS_DIR}
-docker build --build-arg BASE_OS_IMAGE="${BASE_OS_IMAGE}" -t ${HARVESTER_OS_IMAGE} .
+docker build --pull --build-arg BASE_OS_IMAGE="${BASE_OS_IMAGE}" -t ${HARVESTER_OS_IMAGE} .
 
 mkdir -p build
 rm -f build/iso-container
-docker run -v /var/run:/var/run --cidfile=build/iso-container ${BASE_OS_IMAGE}-tools makeiso ${HARVESTER_OS_IMAGE}
-docker cp $(cat build/iso-container):/output.iso ${DIST_DIR}/harvester-${VERSION}.iso
+docker run --pull always -v /var/run:/var/run --cidfile=build/iso-container ${BASE_OS_IMAGE}-tools makeiso ${HARVESTER_OS_IMAGE}
+docker cp $(cat build/iso-container):/output.iso ${DIST_DIR}/harvester.iso
 docker rm -fv $(cat build/iso-container)
 rm -f build/iso-container
