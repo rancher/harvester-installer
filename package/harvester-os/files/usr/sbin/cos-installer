@@ -172,7 +172,7 @@ do_mount()
 
     mkdir -p ${STATEDIR}/cOS
     # TODO: Size should be tweakable
-    dd if=/dev/zero of=${STATEDIR}/cOS/active.img bs=1M count=5120
+    dd if=/dev/zero of=${STATEDIR}/cOS/active.img bs=1M count=3240
     mkfs.ext2 ${STATEDIR}/cOS/active.img -L COS_ACTIVE
     sync
     LOOP=$(losetup --show -f ${STATEDIR}/cOS/active.img)
@@ -217,7 +217,9 @@ do_copy()
 
     echo "Copying cOS.."
 
-    rsync -aqAX --exclude='mnt' --exclude='proc' --exclude='sys' --exclude='dev' --exclude='tmp' ${DISTRO}/ ${TARGET}
+    PRELOAD_DIR="/usr/share/rancher/preload"
+
+    rsync -aqAX --exclude='mnt' --exclude='proc' --exclude='sys' --exclude='dev' --exclude='tmp' --exclude=${PRELOAD_DIR}/images ${DISTRO}/ ${TARGET}
      if [ -n "$COS_INSTALL_CONFIG_URL" ]; then
         OEM=${TARGET}/oem/99_custom.yaml
         get_url "$COS_INSTALL_CONFIG_URL" $OEM
@@ -225,6 +227,9 @@ do_copy()
     fi
     mkdir -p $TARGET/usr/local/cloud-config
     chmod 640 $TARGET/usr/local/cloud-config
+
+    mkdir -p $TARGET/$PRELOAD_DIR
+    mount --bind $PRELOAD_DIR $TARGET/$PRELOAD_DIR
 
     # Bind mount persistent folder to preload images
     BIND_MOUNTS=("var/lib/rancher")
@@ -245,12 +250,14 @@ do_copy()
     echo "Loading images. This may take a few minutes..."
     chroot . /bin/bash <<"EOF"
       set -e
+
+      PRELOAD_IMAGE_DIR=/usr/share/rancher/preload/images
       # Start RKE2 set up data dir and bring up containerd
       mkdir -p /var/lib/rancher/rke2/agent/images
-      cp /var/lib/harvester/images/rke2-*.zst  /var/lib/rancher/rke2/agent/images
-      cp /var/lib/harvester/images/rancherd-bootstrap-images.tar.zst  /var/lib/rancher/rke2/agent/images
-      cp /var/lib/harvester/images/rancherd-images.tar.zst  /var/lib/rancher/rke2/agent/images
-      cp /var/lib/harvester/images/harvester-repo-images.tar.zst  /var/lib/rancher/rke2/agent/images
+      cp $PRELOAD_IMAGE_DIR/rke2-*.zst  /var/lib/rancher/rke2/agent/images
+      cp $PRELOAD_IMAGE_DIR/rancherd-bootstrap-images.tar.zst  /var/lib/rancher/rke2/agent/images
+      cp $PRELOAD_IMAGE_DIR/rancherd-images.tar.zst  /var/lib/rancher/rke2/agent/images
+      cp $PRELOAD_IMAGE_DIR/harvester-repo-images.tar.zst  /var/lib/rancher/rke2/agent/images
       rke2 server &> /rke2.log &
 
       export PATH=/var/lib/rancher/rke2/bin:$PATH
@@ -267,11 +274,11 @@ do_copy()
       trap "rm -rf $INSTALL_TMP" EXIT
 
       # import images
-      zstd -d /var/lib/harvester/images/harvester-images.tar.zst -o $INSTALL_TMP/harvester-images.tar > /dev/null
+      zstd -d $PRELOAD_IMAGE_DIR/harvester-images.tar.zst -o $INSTALL_TMP/harvester-images.tar > /dev/null
       ctr -n k8s.io images import $INSTALL_TMP/harvester-images.tar
 
       # make sure all preloading images are ready
-      for i in /var/lib/harvester/images/*.txt; do
+      for i in $PRELOAD_IMAGE_DIR/*.txt; do
         ctr-check-images.sh $i
       done
 
@@ -285,7 +292,7 @@ do_copy()
 
       # rancherd bootstrap images
       mkdir -p /var/lib/rancher/agent/images
-      cp /var/lib/harvester/images/rancherd-bootstrap-images.tar.zst /var/lib/rancher/agent/images
+      cp $PRELOAD_IMAGE_DIR/rancherd-bootstrap-images.tar.zst /var/lib/rancher/agent/images
 
       exit
 EOF
@@ -295,6 +302,8 @@ EOF
     for i in ${BIND_MOUNTS[@]}; do
         umount $i
     done
+
+    umount ${TARGET}/${PRELOAD_DIR}
 
     # do not occupy the target folder
     cd - &> /dev/null
@@ -469,8 +478,7 @@ install_grub
 
 SELinux_relabel
 
-# umount_target 2>/dev/null
-umount_target
+umount_target 2>/dev/null
 
 prepare_recovery
 prepare_passive

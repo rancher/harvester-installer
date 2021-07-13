@@ -3,7 +3,8 @@ FROM ${BASE_OS_IMAGE}
 
 ARG RKE2_VERSION=v1.21.2+rke2r1
 ARG RKE2_IMAGES_URL=https://github.com/rancher/rke2/releases/download/${RKE2_VERSION}
-ARG IMAGES_DIR=/var/lib/harvester/images
+ARG PRELOAD_DIR=/usr/share/rancher/preload
+ARG IMAGES_DIR=$PRELOAD_DIR/images
 
 # packages
 RUN zypper in -y wget zstd
@@ -25,11 +26,11 @@ RUN curl -L https://github.com/bk201/rancherd/releases/download/dev-20210707/ran
     chmod +x /usr/bin/rancherd
 
 ENV CATTLE_SYSTEM_AGENT_VERSION v0.0.1-alpha34
-RUN mkdir -p /var/lib/harvester/binaries/ && \
-    curl -sfL https://github.com/rancher/system-agent/releases/download/${CATTLE_SYSTEM_AGENT_VERSION}/rancher-system-agent-amd64 -o /var/lib/harvester/binaries/rancher-system-agent && \
-    chmod +x /var/lib/harvester/binaries/rancher-system-agent
+RUN mkdir -p $PRELOAD_DIR/binaries/ && \
+    curl -sfL https://github.com/rancher/system-agent/releases/download/${CATTLE_SYSTEM_AGENT_VERSION}/rancher-system-agent-amd64 -o $PRELOAD_DIR/binaries/rancher-system-agent && \
+    chmod +x $PRELOAD_DIR/binaries/rancher-system-agent
 
 # Harvester images
-COPY images /var/lib/harvester/images
+COPY images $IMAGES_DIR
 
 COPY files/ /
