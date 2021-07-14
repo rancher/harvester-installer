@@ -1,0 +1,11 @@
+name: "Bring up interface"
+stages:
+  initramfs:
+    - commands:
+      - |
+        if grep -q root=live:CDLABEL=COS_LIVE /proc/cmdline || [ -n "$(blkid -L COS_SYSTEM)" ]; then
+          for i in /sys/class/net/eth*; do
+            [ -e $i ] || continue
+            ip link set $(basename $i) up;
+          done
+        fi
