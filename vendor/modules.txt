@@ -1,5 +1,4 @@
 # github.com/coreos/yaml v0.0.0-20141224210557-6b16a5714269
-## explicit
 github.com/coreos/yaml
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew

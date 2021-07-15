@@ -1,44 +1,17 @@
 package config
 
 import (
-	"bytes"
-	"io/ioutil"
+	"fmt"
 	"strconv"
 	"strings"
-	"text/template"
 
-	"github.com/coreos/yaml"
+	"github.com/harvester/harvester-installer/pkg/util"
 	yipSchema "github.com/mudler/yip/pkg/schema"
 )
 
 const (
-	CosLoginUser           = "rancher"
-	CosRancherdConfigTempl = `{{if .server -}}
-server: {{.server}}
-role: agent
-{{- else -}}
-role: cluster-init
-{{- end }}
-token: {{ .token }}
-kubernetesVersion: v1.21.2+rke2r1
-labels:
- - harvesterhci.io/managed=true
-`
-	CosRKE2Config = `cni: multus,canal
-disable: rke2-ingress-nginx
-cluster-cidr: 10.52.0.0/16
-service-cidr: 10.53.0.0/16
-cluster-dns: 10.53.0.10
-`
+	cosLoginUser = "rancher"
 )
-
-func toYAMLFile(o interface{}, file string) error {
-	bytes, err := yaml.Marshal(o)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(file, bytes, 0644)
-}
 
 // ConvertToCOS converts HarvesterConfig to cOS configuration.
 func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
@@ -54,12 +27,12 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 	}
 
 	// TOP
-	if err := initRancherdStage(cfg.ServerURL, cfg.Token, &initramfs); err != nil {
+	if err := initRancherdStage(config, &initramfs); err != nil {
 		return nil, err
 	}
 
 	// OS
-	initramfs.SSHKeys[CosLoginUser] = cfg.OS.SSHAuthorizedKeys
+	initramfs.SSHKeys[cosLoginUser] = cfg.OS.SSHAuthorizedKeys
 
 	for _, ff := range cfg.OS.WriteFiles {
 		perm, err := strconv.ParseUint(ff.RawFilePermissions, 8, 0)
@@ -86,7 +59,7 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 	// cloudConfig.K3OS.Wifi = copyWifi(cfg.OS.Wifi)
 
 	// TODO(kiefer): suggest using hash value in the doc
-	initramfs.Users[CosLoginUser] = yipSchema.User{
+	initramfs.Users[cosLoginUser] = yipSchema.User{
 		PasswordHash: cfg.OS.Password,
 	}
 
@@ -104,17 +77,13 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 	return cosConfig, nil
 }
 
-func initRancherdStage(server string, token string, stage *yipSchema.Stage) error {
-	context := map[string]string{}
-	context["server"] = server
-	context["token"] = token
-
-	rancherdConfig := bytes.NewBufferString("")
-	tmpl, err := template.New("rancherd").Parse(CosRancherdConfigTempl)
+func initRancherdStage(config *HarvesterConfig, stage *yipSchema.Stage) error {
+	rancherdConfig, err := render("rancherd-config.yaml", config)
 	if err != nil {
 		return err
 	}
-	err = tmpl.Execute(rancherdConfig, context)
+
+	rke2Config, err := render("rke2-99-harvester.yaml", config)
 	if err != nil {
 		return err
 	}
@@ -135,7 +104,7 @@ func initRancherdStage(server string, token string, stage *yipSchema.Stage) erro
 	stage.Files = append(stage.Files,
 		yipSchema.File{
 			Path:        "/etc/rancher/rancherd/config.yaml",
-			Content:     rancherdConfig.String(),
+			Content:     rancherdConfig,
 			Permissions: 0600,
 			Owner:       0,
 			Group:       0,
@@ -143,11 +112,11 @@ func initRancherdStage(server string, token string, stage *yipSchema.Stage) erro
 	)
 
 	// server role: add network settings
-	if server == "" {
+	if config.ServerURL == "" {
 		stage.Files = append(stage.Files,
 			yipSchema.File{
 				Path:        "/etc/rancher/rke2/config.yaml.d/99-harvester.yaml",
-				Content:     CosRKE2Config,
+				Content:     rke2Config,
 				Permissions: 0600,
 				Owner:       0,
 				Group:       0,

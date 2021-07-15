@@ -3,7 +3,6 @@ module github.com/harvester/harvester-installer
 go 1.16
 
 require (
-	github.com/coreos/yaml v0.0.0-20141224210557-6b16a5714269
 	github.com/ghodss/yaml v1.0.0
 	github.com/imdario/mergo v0.3.12
 	github.com/jroimartin/gocui v0.4.0
