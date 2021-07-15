@@ -117,9 +117,9 @@ func checkNetworks(networks []config.Network) error {
 			return err
 		}
 		switch networkMethod := network.Method; networkMethod {
-		case networkMethodDHCP, "":
+		case config.NetworkMethodDHCP, "":
 			return nil
-		case networkMethodStatic:
+		case config.NetworkMethodStatic:
 			if err := checkStaticRequiredString("ip", network.IP); err != nil {
 				return err
 			}

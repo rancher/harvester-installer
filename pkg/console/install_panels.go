@@ -550,7 +550,7 @@ func addTokenPanel(c *Console) error {
 }
 
 func showNetworkPage(c *Console) error {
-	if mgmtNetwork.Method != networkMethodStatic {
+	if mgmtNetwork.Method != config.NetworkMethodStatic {
 		return showNext(c, askInterfacePanel, askNetworkMethodPanel, hostNamePanel)
 	}
 	return showNext(c, askInterfacePanel, askNetworkMethodPanel, addressPanel, gatewayPanel, dnsServersPanel, hostNamePanel)
@@ -635,16 +635,16 @@ func addNetworkPanel(c *Console) error {
 	}
 
 	setupNetwork := func() ([]byte, error) {
-		cmd := exec.Command("/bin/sh", "-c", getConfigureNetworkCMD(mgmtNetwork))
-		cmd.Env = os.Environ()
-		return cmd.CombinedOutput()
+		return applyNetworks([]config.Network{mgmtNetwork})
 	}
 
 	preGotoNextPage := func() (string, error) {
 		output, err := setupNetwork()
 		if err != nil {
-			return fmt.Sprintf("Configure network failed: %s", string(output)), nil
+			return fmt.Sprintf("Configure network failed: %s %s", string(output), err), nil
 		}
+		logrus.Infof("Network configuration is applied: %s", output)
+
 		c.config.Networks = []config.Network{
 			mgmtNetwork,
 		}
@@ -721,7 +721,7 @@ func addNetworkPanel(c *Console) error {
 		}
 		c.config.Install.MgmtInterface = selected
 		mgmtNetwork.Interface = selected
-		if mgmtNetwork.Method != networkMethodStatic {
+		if mgmtNetwork.Method != config.NetworkMethodStatic {
 			return showNext(c, askNetworkMethodPanel)
 		}
 		return showNext(c, dnsServersPanel, gatewayPanel, addressPanel, askNetworkMethodPanel)
@@ -737,7 +737,7 @@ func addNetworkPanel(c *Console) error {
 
 	// askNetworkMethodV
 	validateDHCPAddresses := func() (string, error) {
-		if mgmtNetwork.Method == networkMethodStatic {
+		if mgmtNetwork.Method == config.NetworkMethodStatic {
 			return "", nil
 		}
 		nic, err := net.InterfaceByName(mgmtNetwork.Interface)
@@ -782,7 +782,7 @@ func addNetworkPanel(c *Console) error {
 		if msg != "" {
 			return c.setContentByName(networkValidatorPanel, msg)
 		}
-		if selected != networkMethodStatic {
+		if selected != config.NetworkMethodStatic {
 			userInputData.Address = ""
 			userInputData.DNSServers = ""
 			mgmtNetwork.IP = ""
@@ -980,11 +980,11 @@ func getNetworkInterfaceOptions() ([]widgets.Option, error) {
 func getNetworkMethodOptions() ([]widgets.Option, error) {
 	return []widgets.Option{
 		{
-			Value: networkMethodDHCP,
+			Value: config.NetworkMethodDHCP,
 			Text:  networkMethodDHCPText,
 		},
 		{
-			Value: networkMethodStatic,
+			Value: config.NetworkMethodStatic,
 			Text:  networkMethodStaticText,
 		},
 	}, nil

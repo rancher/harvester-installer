@@ -40,9 +40,7 @@ const (
 	gatewayLabel          = "Gateway"
 	dnsServersLabel       = "DNS Servers"
 
-	networkMethodDHCP       = "dhcp"
 	networkMethodDHCPText   = "Automatic (DHCP)"
-	networkMethodStatic     = "static"
 	networkMethodStaticText = "Static"
 
 	clusterTokenCreateNote = "Note: The token is used for adding nodes to the cluster"

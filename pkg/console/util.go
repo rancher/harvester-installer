@@ -171,19 +171,6 @@ func generateHostName() string {
 	return "harvester-" + rand.String(5)
 }
 
-func getConfigureNetworkCMD(network config.Network) string {
-	if network.Method == networkMethodStatic {
-		return fmt.Sprintf("/sbin/harvester-configure-network %s %s %s %s %s %s",
-			network.Interface,
-			network.Method,
-			network.IP,
-			network.SubnetMask,
-			network.Gateway,
-			strings.Join(network.DNSNameservers, " "))
-	}
-	return fmt.Sprintf("/sbin/harvester-configure-network %s %s", network.Interface, networkMethodDHCP)
-}
-
 func execute(g *gocui.Gui, env []string, cmdName string) error {
 	cmd := exec.Command(cmdName)
 	cmd.Env = env
