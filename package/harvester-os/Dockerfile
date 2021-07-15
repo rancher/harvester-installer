@@ -6,9 +6,6 @@ ARG RKE2_IMAGES_URL=https://github.com/rancher/rke2/releases/download/${RKE2_VER
 ARG PRELOAD_DIR=/usr/share/rancher/preload
 ARG IMAGES_DIR=$PRELOAD_DIR/images
 
-# packages
-RUN zypper in -y wget zstd
-
 # RKE2
 RUN curl -sfL https://get.rke2.io --output /tmp/install.sh && chmod +x /tmp/install.sh && sed -i '/systemctl daemon-reload/d' /tmp/install.sh
 RUN INSTALL_RKE2_METHOD="tar" INSTALL_RKE2_TAR_PREFIX="/usr" INSTALL_RKE2_VERSION="$RKE2_VERSION" /tmp/install.sh && rm /tmp/install.sh
@@ -29,6 +26,11 @@ ENV CATTLE_SYSTEM_AGENT_VERSION v0.0.1-alpha34
 RUN mkdir -p $PRELOAD_DIR/binaries/ && \
     curl -sfL https://github.com/rancher/system-agent/releases/download/${CATTLE_SYSTEM_AGENT_VERSION}/rancher-system-agent-amd64 -o $PRELOAD_DIR/binaries/rancher-system-agent && \
     chmod +x $PRELOAD_DIR/binaries/rancher-system-agent
+
+ARG CACHEBUST
+# packages
+RUN zypper ref
+RUN zypper in -y wget zstd
 
 # Harvester images
 COPY images $IMAGES_DIR
