@@ -66,7 +66,7 @@ func TestValidateConfig(t *testing.T) {
 				Password:          "password",
 			},
 			Install: config.Install{
-				Mode:          modeCreate,
+				Mode:          config.ModeCreate,
 				MgmtInterface: "eth0",
 				Device:        "/dev/vda",
 			},
@@ -76,7 +76,7 @@ func TestValidateConfig(t *testing.T) {
 	createJoinConfig := func() *config.HarvesterConfig {
 		c := createCreateConfig()
 		c.ServerURL = "https://somewhere"
-		c.Mode = modeJoin
+		c.Mode = config.ModeJoin
 		return c
 	}
 

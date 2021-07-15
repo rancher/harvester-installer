@@ -72,6 +72,27 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 		}
 	}
 
+	// mgmt interface: https://docs.rke2.io/install/network_options/#canal-options
+	if cfg.Install.Mode == "create" && cfg.Install.MgmtInterface != "" {
+		canalHelmChartConfig, err := render("rke2-canal-config.yaml", config)
+		if err != nil {
+			return nil, err
+		}
+		initramfs.Directories = append(initramfs.Directories, yipSchema.Directory{
+			Path:        "/var/lib/rancher/rke2/server/manifests/",
+			Permissions: 0600,
+			Owner:       0,
+			Group:       0,
+		})
+		initramfs.Files = append(initramfs.Files, yipSchema.File{
+			Path:        "/var/lib/rancher/rke2/server/manifests/rke2-canal-config.yaml",
+			Content:     canalHelmChartConfig,
+			Permissions: 0600,
+			Owner:       0,
+			Group:       0,
+		})
+	}
+
 	cosConfig := &yipSchema.YipConfig{
 		Name: "Harvester Configuration",
 		Stages: map[string][]yipSchema.Stage{

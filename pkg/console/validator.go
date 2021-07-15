@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrMsgModeCreateContainsServerURL   = fmt.Sprintf("ServerURL need to be empty in %s mode", modeCreate)
-	ErrMsgModeJoinServerURLNotSpecified = fmt.Sprintf("ServerURL can't empty in %s mode", modeJoin)
+	ErrMsgModeCreateContainsServerURL   = fmt.Sprintf("ServerURL need to be empty in %s mode", config.ModeCreate)
+	ErrMsgModeJoinServerURLNotSpecified = fmt.Sprintf("ServerURL can't empty in %s mode", config.ModeJoin)
 	ErrMsgModeUnknown                   = "unknown mode"
 	ErrMsgTokenNotSpecified             = "token not specified"
 
@@ -153,7 +153,7 @@ func checkNetworks(networks []config.Network) error {
 }
 
 func (v ConfigValidator) Validate(cfg *config.HarvesterConfig) error {
-	if cfg.Install.MgmtInterface == "" {
+	if cfg.Install.Mode == config.ModeCreate && cfg.Install.MgmtInterface == "" {
 		return errors.New(ErrMsgMgmtInterfaceNotSpecified)
 	}
 
@@ -175,13 +175,13 @@ func (v ConfigValidator) Validate(cfg *config.HarvesterConfig) error {
 func commonCheck(cfg *config.HarvesterConfig) error {
 	// modes
 	switch mode := cfg.Install.Mode; mode {
-	case modeUpgrade:
+	case config.ModeUpgrade:
 		return nil
-	case modeCreate:
+	case config.ModeCreate:
 		if cfg.ServerURL != "" {
 			return errors.New(ErrMsgModeCreateContainsServerURL)
 		}
-	case modeJoin:
+	case config.ModeJoin:
 		if cfg.ServerURL == "" {
 			return errors.New(ErrMsgModeJoinServerURLNotSpecified)
 		}

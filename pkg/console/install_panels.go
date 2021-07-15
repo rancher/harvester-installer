@@ -56,7 +56,7 @@ func (c *Console) layoutInstall(g *gocui.Gui) error {
 			if cfg.Install.Automatic {
 				logrus.Info("Start automatic installation...")
 				mergo.Merge(c.config, cfg, mergo.WithAppendSlice)
-				if cfg.Install.Mode == modeUpgrade {
+				if cfg.Install.Mode == config.ModeUpgrade {
 					initPanel = upgradePanel
 				} else {
 					initPanel = installPanel
@@ -205,10 +205,10 @@ func addAskCreatePanel(c *Console) error {
 	askOptionsFunc := func() ([]widgets.Option, error) {
 		options := []widgets.Option{
 			{
-				Value: modeCreate,
+				Value: config.ModeCreate,
 				Text:  "Create a new Harvester cluster",
 			}, {
-				Value: modeJoin,
+				Value: config.ModeJoin,
 				Text:  "Join an existing Harvester cluster",
 			},
 		}
@@ -217,7 +217,7 @@ func addAskCreatePanel(c *Console) error {
 			logrus.Error(err)
 		} else if installed {
 			options = append(options, widgets.Option{
-				Value: modeUpgrade,
+				Value: config.ModeUpgrade,
 				Text:  "Upgrade Harvester",
 			})
 		}
@@ -242,10 +242,10 @@ func addAskCreatePanel(c *Console) error {
 			c.config.Install.Mode = selected
 			askCreateV.Close()
 
-			if selected == modeCreate {
+			if selected == config.ModeCreate {
 				c.config.ServerURL = ""
 				userInputData.ServerURL = ""
-			} else if selected == modeUpgrade {
+			} else if selected == config.ModeUpgrade {
 				return showNext(c, confirmUpgradePanel)
 			}
 			return showNext(c, diskPanel)
@@ -511,7 +511,7 @@ func addTokenPanel(c *Console) error {
 		c.Gui.Cursor = true
 		tokenV.Value = c.config.Token
 		tokenNote := clusterTokenJoinNote
-		if c.config.Install.Mode == modeCreate {
+		if c.config.Install.Mode == config.ModeCreate {
 			tokenNote = clusterTokenCreateNote
 		}
 		if err = c.setContentByName(notePanel, tokenNote); err != nil {
@@ -538,7 +538,7 @@ func addTokenPanel(c *Console) error {
 		},
 		gocui.KeyEsc: func(g *gocui.Gui, v *gocui.View) error {
 			closeThisPage()
-			if c.config.Install.Mode == modeCreate {
+			if c.config.Install.Mode == config.ModeCreate {
 				g.Cursor = false
 				return showNetworkPage(c)
 			}
@@ -653,7 +653,7 @@ func addNetworkPanel(c *Console) error {
 	}
 
 	getNextPagePanel := func() string {
-		if c.config.Install.Mode == modeCreate {
+		if c.config.Install.Mode == config.ModeCreate {
 			return tokenPanel
 		}
 		return serverURLPanel

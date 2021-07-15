@@ -28,10 +28,6 @@ const (
 	confirmUpgradePanel   = "confirmUpgrade"
 	upgradePanel          = "upgrade"
 
-	modeCreate  = "create"
-	modeJoin    = "join"
-	modeUpgrade = "upgrade"
-
 	networkTitle          = "Configure network connection"
 	askInterfaceLabel     = "Management NIC"
 	askNetworkMethodLabel = "IPv4 Method"
