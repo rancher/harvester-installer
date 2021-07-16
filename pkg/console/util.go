@@ -227,18 +227,24 @@ func doInstall(g *gocui.Gui, hvstConfig *config.HarvesterConfig, cosConfig *yipS
 		defer os.Remove(tempFile.Name())
 	}
 
-	ev := []string{
-		fmt.Sprintf("COS_INSTALL_CONFIG_URL=%s", tempFile.Name()),
-		fmt.Sprintf("COS_INSTALL_DEVICE=%s", hvstConfig.Install.Device),
+	hvstConfig.Install.ConfigURL = tempFile.Name()
+
+	ev, err := hvstConfig.ToCosInstallEnv()
+	if err != nil {
+		return nil
 	}
+
 	env := append(os.Environ(), ev...)
 	if err := execute(g, env, "/usr/sbin/cos-installer"); err != nil {
 		webhooks.Handle(EventInstallFailed)
 		return err
 	}
-
 	webhooks.Handle(EventInstallSuceeded)
-	// shutdown
+
+	if err := execute(g, env, "/usr/sbin/cos-installer-shutdown"); err != nil {
+		webhooks.Handle(EventInstallFailed)
+		return err
+	}
 
 	return nil
 }

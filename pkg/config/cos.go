@@ -248,3 +248,7 @@ func UpdateWifiConfig(stage *yipSchema.Stage, wifis []Wifi, run bool) error {
 
 	return nil
 }
+
+func (c *HarvesterConfig) ToCosInstallEnv() ([]string, error) {
+	return ToEnv("COS_INSTALL_", c.Install)
+}
