@@ -308,7 +308,7 @@ EOF
     # do not occupy the target folder
     cd - &> /dev/null
 
-    OEM=${TARGET}/oem/99_custom_more.yaml
+    OEM=${TARGET}/oem/99_env.yaml
     cat > $OEM <<"EOF"
 name: More customization
 stages:
@@ -323,6 +323,7 @@ stages:
         alias k=kubectl
       permissions: 0644
 EOF
+    chmod 0600 ${TARGET}/oem/99_env.yaml
 }
 
 SELinux_relabel()

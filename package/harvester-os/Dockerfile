@@ -36,3 +36,4 @@ RUN zypper in -y wget zstd
 COPY images $IMAGES_DIR
 
 COPY files/ /
+RUN chmod 0600 /system/oem/*
