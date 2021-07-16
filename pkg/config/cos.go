@@ -55,8 +55,9 @@ func ConvertToCOS(config *HarvesterConfig) (*yipSchema.YipConfig, error) {
 	initramfs.TimeSyncd["NTP"] = strings.Join(cfg.OS.NTPServers, " ")
 	initramfs.Dns.Nameservers = cfg.OS.DNSNameservers
 
-	// TODO(kiefer): wicked WIFI?
-	// cloudConfig.K3OS.Wifi = copyWifi(cfg.OS.Wifi)
+	if err := UpdateWifiConfig(&initramfs, cfg.OS.Wifi, false); err != nil {
+		return nil, err
+	}
 
 	// TODO(kiefer): suggest using hash value in the doc
 	initramfs.Users[cosLoginUser] = yipSchema.User{
@@ -208,6 +209,37 @@ func UpdateNetworkConfig(stage *yipSchema.Stage, networks []Network, run bool) e
 				stage.Dns.Nameservers = append(stage.Dns.Nameservers, nameServer)
 			}
 		}
+	}
+
+	if run {
+		stage.Commands = append(stage.Commands, fmt.Sprintf("wicked ifreload %s", strings.Join(interfaces, " ")))
+	}
+
+	return nil
+}
+
+func UpdateWifiConfig(stage *yipSchema.Stage, wifis []Wifi, run bool) error {
+	if len(wifis) == 0 {
+		return nil
+	}
+
+	var interfaces []string
+	for i, wifi := range wifis {
+		iface := fmt.Sprintf("wlan%d", i)
+
+		ifcfg, err := render("wicked-ifcfg-wlan", wifi)
+		if err != nil {
+			return err
+		}
+		stage.Files = append(stage.Files, yipSchema.File{
+			Path:        fmt.Sprintf("/etc/sysconfig/network/ifcfg-%s", iface),
+			Content:     ifcfg,
+			Permissions: 0600,
+			Owner:       0,
+			Group:       0,
+		})
+
+		interfaces = append(interfaces, iface)
 	}
 
 	if run {
