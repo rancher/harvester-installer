@@ -112,26 +112,26 @@ func TestF(t *testing.T) {
 	}
 }
 
-func TestGetServerURLFromEnvData(t *testing.T) {
+func TestGetServerURLFromRancherdConfig(t *testing.T) {
 	testCases := []struct {
 		input []byte
 		url   string
 		err   error
 	}{
 		{
-			input: []byte("K3S_CLUSTER_SECRET=abc\nK3S_URL=https://172.0.0.1:6443"),
-			url:   "https://172.0.0.1:8443",
+			input: []byte("role: cluster-init\nkubernetesVersion: v1.21.2+rke2r1"),
+			url:   "",
 			err:   nil,
 		},
 		{
-			input: []byte("K3S_CLUSTER_SECRET=abc\nK3S_URL=https://172.0.0.1:6443\nK3S_NODE_NAME=abc"),
+			input: []byte("role: agent\nkubernetesVersion: v1.21.2+rke2r1\nserver: https://172.0.0.1:8443"),
 			url:   "https://172.0.0.1:8443",
 			err:   nil,
 		},
 	}
 
 	for _, testCase := range testCases {
-		url, err := getServerURLFromEnvData(testCase.input)
+		url, err := getServerURLFromRancherdConfig(testCase.input)
 		assert.Equal(t, testCase.url, url)
 		assert.Equal(t, testCase.err, err)
 	}

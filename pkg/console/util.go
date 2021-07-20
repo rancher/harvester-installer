@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
@@ -130,17 +129,17 @@ func getFormattedServerURL(addr string) (string, error) {
 	return fmt.Sprintf("https://%s:%s", addr, rancherManagementPort), nil
 }
 
-func getServerURLFromEnvData(data []byte) (string, error) {
-	regexp, err := regexp.Compile("K3S_URL=(.*)\\b")
+func getServerURLFromRancherdConfig(data []byte) (string, error) {
+	rancherdConf := make(map[string]interface{})
+	err := yaml.Unmarshal(data, rancherdConf)
 	if err != nil {
 		return "", err
 	}
-	matches := regexp.FindSubmatch(data)
-	if len(matches) == 2 {
-		serverURL := string(matches[1])
-		i := strings.LastIndex(serverURL, ":")
-		if i >= 0 {
-			return serverURL[:i] + ":8443", nil
+
+	if server, ok := rancherdConf["server"]; ok {
+		serverURL, typeOK := server.(string)
+		if typeOK {
+			return serverURL, nil
 		}
 	}
 	return "", nil

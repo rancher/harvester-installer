@@ -7,4 +7,6 @@ const (
 
 	NetworkMethodDHCP   = "dhcp"
 	NetworkMethodStatic = "static"
+
+	RancherdConfigFile = "/etc/rancher/rancherd/config.yaml"
 )

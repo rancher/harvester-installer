@@ -130,7 +130,7 @@ func initRancherdStage(config *HarvesterConfig, stage *yipSchema.Stage) error {
 
 	stage.Files = append(stage.Files,
 		yipSchema.File{
-			Path:        "/etc/rancher/rancherd/config.yaml",
+			Path:        RancherdConfigFile,
 			Content:     rancherdConfig,
 			Permissions: 0600,
 			Owner:       0,
