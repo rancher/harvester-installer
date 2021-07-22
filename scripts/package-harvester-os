@@ -8,7 +8,7 @@ PACKAGE_HARVESTER_OS_DIR="${TOP_DIR}/package/harvester-os"
 source ${SCRIPTS_DIR}/version
 
 # TODO(kiefer): Use formal RancherOSv2 image
-BASE_OS_IMAGE="bk201z/os2:efe5eb4"
+BASE_OS_IMAGE="bk201z/os2:fe70415"
 HARVESTER_OS_IMAGE=rancher/harvester-os:$VERSION
 
 cd ${PACKAGE_HARVESTER_OS_DIR}
