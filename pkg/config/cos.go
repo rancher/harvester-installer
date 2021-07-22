@@ -110,11 +110,6 @@ func initRancherdStage(config *HarvesterConfig, stage *yipSchema.Stage) error {
 		return err
 	}
 
-	rke2Config, err := render("rke2-99-harvester.yaml", config)
-	if err != nil {
-		return err
-	}
-
 	stage.Directories = append(stage.Directories,
 		yipSchema.Directory{
 			Path:        "/etc/rancher/rancherd",
@@ -138,18 +133,37 @@ func initRancherdStage(config *HarvesterConfig, stage *yipSchema.Stage) error {
 		},
 	)
 
-	// server role: add network settings
+	// RKE2 settings that can't be configured in rancherd
+	rke2ServerConfig, err := render("rke2-90-harvester-server.yaml", config)
+	if err != nil {
+		return err
+	}
+
 	if config.ServerURL == "" {
 		stage.Files = append(stage.Files,
 			yipSchema.File{
-				Path:        "/etc/rancher/rke2/config.yaml.d/99-harvester.yaml",
-				Content:     rke2Config,
+				Path:        "/etc/rancher/rke2/config.yaml.d/90-harvester-server.yaml",
+				Content:     rke2ServerConfig,
 				Permissions: 0600,
 				Owner:       0,
 				Group:       0,
 			},
 		)
 	}
+
+	rke2AgentConfig, err := render("rke2-90-harvester-agent.yaml", config)
+	if err != nil {
+		return err
+	}
+	stage.Files = append(stage.Files,
+		yipSchema.File{
+			Path:        "/etc/rancher/rke2/config.yaml.d/90-harvester-agent.yaml",
+			Content:     rke2AgentConfig,
+			Permissions: 0600,
+			Owner:       0,
+			Group:       0,
+		},
+	)
 
 	return nil
 }
