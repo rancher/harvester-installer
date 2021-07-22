@@ -1,0 +1,25 @@
+#!/bin/bash -e
+
+TOP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+DIST_DIR="${TOP_DIR}/dist"
+SCRIPTS_DIR="${TOP_DIR}/scripts"
+PACKAGE_HARVESTER_OS_DIR="${TOP_DIR}/package/harvester-os"
+
+source ${SCRIPTS_DIR}/version
+
+# TODO(kiefer): Use formal RancherOSv2 image
+BASE_OS_IMAGE="bk201z/os2:fe70415"
+HARVESTER_OS_IMAGE=rancher/harvester-os:$VERSION
+
+cd ${PACKAGE_HARVESTER_OS_DIR}
+docker build --pull \
+	--build-arg BASE_OS_IMAGE="${BASE_OS_IMAGE}" \
+	--build-arg CACHEBUST="$(date)" \
+	-t ${HARVESTER_OS_IMAGE} .
+
+mkdir -p build
+rm -f build/iso-container
+docker run --pull always -v /var/run:/var/run --cidfile=build/iso-container ${BASE_OS_IMAGE}-tools makeiso ${HARVESTER_OS_IMAGE}
+docker cp $(cat build/iso-container):/output.iso ${DIST_DIR}/harvester.iso
+docker rm -fv $(cat build/iso-container)
+rm -f build/iso-container

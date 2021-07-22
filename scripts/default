@@ -5,4 +5,6 @@ cd $(dirname $0)
 
 ./build
 ./test
-./package
+./build-data
+./package-harvester-repo
+./package-harvester-os

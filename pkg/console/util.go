@@ -9,26 +9,26 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/jroimartin/gocui"
+	yipSchema "github.com/mudler/yip/pkg/schema"
 	"github.com/pkg/errors"
-	k3os "github.com/rancher/k3os/pkg/config"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/http/httpproxy"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"github.com/harvester/harvester-installer/pkg/config"
 )
 
 const (
-	defaultHTTPTimeout = 15 * time.Second
-	harvesterNodePort  = "30443"
-	automaticCmdline   = "harvester.automatic"
+	rancherManagementPort = "8443"
+	defaultHTTPTimeout    = 15 * time.Second
+	harvesterNodePort     = "30443"
+	automaticCmdline      = "harvester.automatic"
 )
 
 func newProxyClient() http.Client {
@@ -126,20 +126,20 @@ func getFormattedServerURL(addr string) (string, error) {
 	if ipErr != nil && domainErr != nil {
 		return "", fmt.Errorf("%s is not a valid ip/domain", addr)
 	}
-	return fmt.Sprintf("https://%s:6443", addr), nil
+	return fmt.Sprintf("https://%s:%s", addr, rancherManagementPort), nil
 }
 
-func getServerURLFromEnvData(data []byte) (string, error) {
-	regexp, err := regexp.Compile("K3S_URL=(.*)\\b")
+func getServerURLFromRancherdConfig(data []byte) (string, error) {
+	rancherdConf := make(map[string]interface{})
+	err := yaml.Unmarshal(data, rancherdConf)
 	if err != nil {
 		return "", err
 	}
-	matches := regexp.FindSubmatch(data)
-	if len(matches) == 2 {
-		serverURL := string(matches[1])
-		i := strings.LastIndex(serverURL, ":")
-		if i >= 0 {
-			return serverURL[:i] + ":8443", nil
+
+	if server, ok := rancherdConf["server"]; ok {
+		serverURL, typeOK := server.(string)
+		if typeOK {
+			return serverURL, nil
 		}
 	}
 	return "", nil
@@ -170,69 +170,6 @@ func generateHostName() string {
 	return "harvester-" + rand.String(5)
 }
 
-func getConfigureNetworkCMD(network config.Network) string {
-	if network.Method == networkMethodStatic {
-		return fmt.Sprintf("/sbin/harvester-configure-network %s %s %s %s %s %s",
-			network.Interface,
-			network.Method,
-			network.IP,
-			network.SubnetMask,
-			network.Gateway,
-			strings.Join(network.DNSNameservers, " "))
-	}
-	return fmt.Sprintf("/sbin/harvester-configure-network %s %s", network.Interface, networkMethodDHCP)
-}
-
-func toCloudConfig(cfg *config.HarvesterConfig) (*k3os.CloudConfig, error) {
-	cloudConfig, err := config.ConvertToK3OS(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// remove the /dev/loop directory as the workaround for https://github.com/harvester/harvester/issues/665
-	cloudConfig.Runcmd = append(cloudConfig.Runcmd, "rm -rf /dev/loop")
-
-	for _, network := range cfg.Install.Networks {
-		if network.Method == networkMethodStatic {
-			cloudConfig.Runcmd = append(cloudConfig.Runcmd, getConfigureNetworkCMD(network))
-		}
-	}
-
-	// k3os & k3s
-	cloudConfig.K3OS.Labels = map[string]string{
-		"harvesterhci.io/managed": "true",
-	}
-
-	var extraK3sArgs []string
-	if cfg.Install.MgmtInterface != "" {
-		extraK3sArgs = []string{"--flannel-iface", cfg.Install.MgmtInterface}
-	}
-
-	if cfg.Install.Mode == modeJoin {
-		cloudConfig.K3OS.K3sArgs = append([]string{"agent"}, extraK3sArgs...)
-		return cloudConfig, nil
-	}
-
-	cloudConfig.K3OS.K3sArgs = append([]string{
-		"server",
-		"--cluster-init",
-		"--disable",
-		"local-storage",
-		"--disable",
-		"servicelb",
-		"--disable",
-		"traefik",
-		"--cluster-cidr",
-		"10.52.0.0/16",
-		"--service-cidr",
-		"10.53.0.0/16",
-		"--cluster-dns",
-		"10.53.0.10",
-	}, extraK3sArgs...)
-
-	return cloudConfig, nil
-}
-
 func execute(g *gocui.Gui, env []string, cmdName string) error {
 	cmd := exec.Command(cmdName)
 	cmd.Env = env
@@ -261,7 +198,7 @@ func execute(g *gocui.Gui, env []string, cmdName string) error {
 	return cmd.Wait()
 }
 
-func doInstall(g *gocui.Gui, cloudConfig *k3os.CloudConfig, webhooks RendererWebhooks) error {
+func doInstall(g *gocui.Gui, hvstConfig *config.HarvesterConfig, cosConfig *yipSchema.YipConfig, webhooks RendererWebhooks) error {
 	webhooks.Handle(EventInstallStarted)
 
 	var (
@@ -269,21 +206,14 @@ func doInstall(g *gocui.Gui, cloudConfig *k3os.CloudConfig, webhooks RendererWeb
 		tempFile *os.File
 	)
 
-	tempFile, err = ioutil.TempFile("/tmp", "k3os.XXXXXXXX")
+	tempFile, err = ioutil.TempFile("/tmp", "cos.XXXXXXXX")
 	if err != nil {
 		return err
 	}
 	defer tempFile.Close()
 
-	cloudConfig.K3OS.Install.ConfigURL = tempFile.Name()
-
-	ev, err := k3os.ToEnv(*cloudConfig)
-	if err != nil {
-		return err
-	}
 	if tempFile != nil {
-		cloudConfig.K3OS.Install = nil
-		bytes, err := yaml.Marshal(cloudConfig)
+		bytes, err := yaml.Marshal(cosConfig)
 		if err != nil {
 			return err
 		}
@@ -296,19 +226,30 @@ func doInstall(g *gocui.Gui, cloudConfig *k3os.CloudConfig, webhooks RendererWeb
 		defer os.Remove(tempFile.Name())
 	}
 
+	hvstConfig.Install.ConfigURL = tempFile.Name()
+
+	ev, err := hvstConfig.ToCosInstallEnv()
+	if err != nil {
+		return nil
+	}
+
 	env := append(os.Environ(), ev...)
-	if err := execute(g, env, "/usr/libexec/k3os/install"); err != nil {
+	if err := execute(g, env, "/usr/sbin/cos-installer"); err != nil {
 		webhooks.Handle(EventInstallFailed)
 		return err
 	}
 	webhooks.Handle(EventInstallSuceeded)
-	if err := execute(g, env, "/usr/libexec/k3os/shutdown"); err != nil {
+
+	if err := execute(g, env, "/usr/sbin/cos-installer-shutdown"); err != nil {
+		webhooks.Handle(EventInstallFailed)
 		return err
 	}
+
 	return nil
 }
 
 func doUpgrade(g *gocui.Gui) error {
+	// TODO(kiefer): to cOS upgrade method
 	cmd := exec.Command("/k3os/system/k3os/current/harvester-upgrade.sh")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {

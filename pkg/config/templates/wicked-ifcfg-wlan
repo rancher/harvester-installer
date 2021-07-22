@@ -1,0 +1,5 @@
+BOOTPROTO='dhcp'
+STARTMODE='auto'
+WIRELESS_MODE='Managed'
+WIRELESS_ESSID='{{ .Name }}'
+WIRELESS_WPA_PSK='{{ .Passphrase }}'

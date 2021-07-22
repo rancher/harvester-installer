@@ -1,0 +1,119 @@
+#!/bin/bash
+set -e
+
+TOP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+SCRIPTS_DIR="${TOP_DIR}/scripts"
+PACKAGE_HARVESTER_OS_DIR="${TOP_DIR}/package/harvester-os"
+PACKAGE_HARVESTER_REPO_DIR="${TOP_DIR}/package/harvester-repo"
+
+cd ${TOP_DIR}
+
+source ${SCRIPTS_DIR}/version
+
+CHARTS_DIR="${PACKAGE_HARVESTER_REPO_DIR}/charts"
+IMAGES_DIR="${PACKAGE_HARVESTER_OS_DIR}/images"
+
+mkdir -p ${CHARTS_DIR}
+mkdir -p ${IMAGES_DIR}
+
+# Prepare Harvester chart
+harvester_path=../harvester
+if [ ! -d ${harvester_path} ];then
+    git clone --branch master --single-branch --depth 1 https://github.com/harvester/harvester.git /tmp/harvester
+    harvester_path=/tmp/harvester
+fi
+harvester_chart_path=${harvester_path}/deploy/charts/harvester
+helm package ${harvester_chart_path} -d ${CHARTS_DIR}
+helm repo index ${CHARTS_DIR}
+
+# Update chart version in Rancherd bootstrap resources
+harvester_chart_version=$(yq e .version ${harvester_chart_path}/Chart.yaml --exit-status)
+sed -i "s/\$HARVESTER_CHART_VERSION/${harvester_chart_version}/" ${PACKAGE_HARVESTER_OS_DIR}/files/usr/share/rancher/rancherd/config.yaml.d/91-harvester-bootstrap.yaml
+
+if [ -e /images ]; then
+  cp /images/* ${IMAGES_DIR}
+  ls ${IMAGES_DIR}
+  exit 0
+fi
+
+# Offline images
+
+# Rancherd bootstrap images
+# FIXME(kiefer): most images are still under devlopment
+xargs -n1 -t docker image pull --quiet << EOF > ${IMAGES_DIR}/rancherd-bootstrap-images.txt
+  ibuildthecloud/system-agent-installer-rancher:dev
+  rancher/system-agent-installer-rke2:v1.21.2-rke2r1
+EOF
+docker image save -o ${IMAGES_DIR}/rancherd-bootstrap-images.tar $(<${IMAGES_DIR}/rancherd-bootstrap-images.txt)
+zstd --rm ${IMAGES_DIR}/rancherd-bootstrap-images.tar -o ${IMAGES_DIR}/rancherd-bootstrap-images.tar.zst
+
+
+# Images needed during cluster-init stage.
+# ibuildthecloud/rancher:dev
+# ibuildthecloud/suc:latest
+xargs -n1 -t docker image pull --quiet << EOF > ${IMAGES_DIR}/rancherd-images.txt
+  ibuildthecloud/rancher-webhook:dev
+  bk201z/rancher:dev
+  bk201z/suc:latest
+  rancher/hardened-cni-plugins:v0.9.1-build20210414
+  rancher/shell:v0.1.8
+  rancher/rancher-webhook:v0.2.0-alpha02
+  rancher/gitjob:v0.1.15
+  rancher/fleet:v0.3.6-rc4
+  rancher/fleet-agent:v0.3.6-rc4
+  rancher/system-upgrade-controller:v0.7.0
+EOF
+docker image save -o ${IMAGES_DIR}/rancherd-images.tar $(<${IMAGES_DIR}/rancherd-images.txt)
+zstd --rm ${IMAGES_DIR}/rancherd-images.tar -o ${IMAGES_DIR}/rancherd-images.tar.zst
+
+# Harvester images: get image list from harvester chart's values file
+image_list_file='harvester-images.txt'
+values_file="${harvester_chart_path}/values.yaml"
+touch ${image_list_file}
+repositories=( $(yq eval ' explode(.) | .. | select(has("repository")) |select(has("tag")) | .repository' ${values_file}) )
+tags=( $(yq eval ' explode(.) | .. | select(has("repository")) |select(has("tag")) | .tag' ${values_file}) )
+repositories_length=${#repositories[@]}
+tags_length=${#tags[@]}
+if [ ${repositories_length} -ne ${tags_length} ];then
+  echo "The number of image repositories does not match the number of image tags";
+  exit 1
+fi
+for i in "${!repositories[@]}"; do
+  echo "${repositories[$i]}:${tags[$i]}">>${image_list_file}
+done
+# The following images are not included in chart or k3s/longhorn image list
+cat <<EOF >> ${image_list_file}
+busybox:1.32.0
+alpine:3
+kubevirt/virtio-container-disk
+rancher/harvester-support-bundle-utils:master-head
+EOF
+
+# get longhorn image list
+longhorn_version=v$(ls ${harvester_chart_path}/charts | grep longhorn| sed -e "s/^longhorn-//" -e "s/.tgz$//")
+longhorn_image_url=https://raw.githubusercontent.com/longhorn/longhorn/${longhorn_version}/deploy/longhorn-images.txt
+curl ${longhorn_image_url}>>${image_list_file}
+
+# format image list
+awk -F ':' '{if($2==""){print $1":latest"}else{print $0}}' "${image_list_file}" | \
+awk -F '/' '{if(NF==3){print $0} else if(NF==2){print "docker.io/"$0}else if(NF=1){print "docker.io/library/"$0}}' >"${image_list_file}.tmp"
+
+# clean image list
+sort -u "${image_list_file}.tmp" | \
+grep -Ev "local-path-provisioner|library-traefik|klipper-lb|multus" >"${image_list_file}"
+
+cat ${image_list_file}
+cp ${image_list_file} ${IMAGES_DIR}
+
+output_image_tar_file="${IMAGES_DIR}/harvester-images.tar"
+if [ -z "${HARVESTER_INSTALLER_OFFLINE_BUILD}" ] && [ ! -f $output_image_tar_file.zst ]; then
+  images=$(cat "${image_list_file}")
+  echo "${images}" | while read -r image
+  do
+    echo "=> pulling ${image}"
+    ctr images pull "${image}" > /dev/null 2>&1
+  done
+  echo "${images}" | xargs -r ctr images export ${output_image_tar_file}
+  zstd --rm ${output_image_tar_file} -o ${output_image_tar_file}.zst
+fi
+

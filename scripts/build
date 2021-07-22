@@ -1,161 +1,20 @@
 #!/bin/bash
 set -e
 
-source $(dirname $0)/version
+TOP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+SCRIPTS_DIR="${TOP_DIR}/scripts"
+PACKAGE_HARVESTER_OS_DIR="${TOP_DIR}/package/harvester-os"
 
-cd $(dirname $0)/..
+cd ${TOP_DIR}
 
-echo "Start building ISO"
+mkdir -p bin
 
-K3S_VERSION=v1.20.4+k3s1
-K3S_IMAGE_URL=https://raw.githubusercontent.com/rancher/k3s/${K3S_VERSION}/scripts/airgap/image-list.txt
-
-RANCHER_VERSION=2.5.7
-RANCHER_IMAGE_URL=https://github.com/rancher/rancher/releases/download/v{$RANCHER_VERSION}/rancher-images.txt
-CERT_MANAGER_VERSION=v1.2.0
-
-# Prepare Harvester chart
-mkdir -p k3os/images/70-iso/charts
-harvester_path=../harvester
-if [ ! -d ${harvester_path} ];then
-    git clone --branch master --single-branch --depth 1 https://github.com/harvester/harvester.git /tmp/harvester
-    harvester_path=/tmp/harvester
-fi
-harvester_chart_path=${harvester_path}/deploy/charts/harvester
-helm package ${harvester_chart_path} -d k3os/images/70-iso/charts
-
-# Prepare Harvester manifests
-HARVESTER_CHART=$(ls k3os/images/70-iso/charts/harvester* | xargs basename)
-sed -i 's/$HARVESTER_CHART/'$HARVESTER_CHART'/' manifests/harvester.yaml
-
-# Prepare the Rancher chart
-helm pull https://releases.rancher.com/server-charts/latest/rancher-${RANCHER_VERSION}.tgz -d k3os/images/70-iso/charts
-# chart sanity check
-tar zxvf k3os/images/70-iso/charts/rancher-*.tgz >/dev/null
-
-# Prepare Rancher manifests
-RANCHER_CHART=$(ls k3os/images/70-iso/charts/rancher* | xargs basename)
-sed -i 's/$RANCHER_CHART/'$RANCHER_CHART'/' manifests/rancher.yaml
-
-# Prepare the cert-manager chart
-helm pull https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_VERSION}.tgz -d k3os/images/70-iso/charts
-# chart sanity check
-tar zxvf k3os/images/70-iso/charts/cert-manager-*.tgz >/dev/null
-
-# Prepare cert-manager manifests
-CERT_MANAGER_CHART=$(ls k3os/images/70-iso/charts/cert* | xargs basename)
-sed -i 's/$CERT_MANAGER_CHART/'$CERT_MANAGER_CHART'/' manifests/cert-manager.yaml
-
-# Copy manifests
-cp -r manifests k3os/images/70-iso/
-
-# Offline docker images
-# get image list from harvester chart's values file
-image_list_file='image-list.txt'
-values_file="${harvester_chart_path}/values.yaml"
-touch ${image_list_file}
-repositories=( $(yq eval ' explode(.) | .. | select(has("repository")) |select(has("tag")) | .repository' ${values_file}) )
-tags=( $(yq eval ' explode(.) | .. | select(has("repository")) |select(has("tag")) | .tag' ${values_file}) )
-repositories_length=${#repositories[@]}
-tags_length=${#tags[@]}
-if [ ${repositories_length} -ne ${tags_length} ];then
-  echo "The number of image repositories does not match the number of image tags";
-  exit 1
-fi
-for i in "${!repositories[@]}"; do
-  echo "${repositories[$i]}:${tags[$i]}">>${image_list_file}
-done
-# The following images are not included in chart or k3s/longhorn image list
-cat <<EOF >> ${image_list_file}
-busybox:1.32.0
-rancher/system-upgrade-controller:v0.6.2
-alpine:3
-kubevirt/virtio-container-disk
-rancher/harvester-support-bundle-utils:master-head
-EOF
-
-# get longhorn image list
-longhorn_version=v$(ls ${harvester_chart_path}/charts | grep longhorn| sed -e "s/^longhorn-//" -e "s/.tgz$//")
-longhorn_image_url=https://raw.githubusercontent.com/longhorn/longhorn/${longhorn_version}/deploy/longhorn-images.txt
-curl ${longhorn_image_url}>>${image_list_file}
-
-# get k3s image list
-curl ${K3S_IMAGE_URL}>>${image_list_file}
-
-# get rancher image list
-RANCHER_REMOTE_IMAGES=rancher-remote-images.txt
-RANCHER_IMAGES=scripts/images/rancher-images.txt
-
-if [ ! -f "$RANCHER_REMOTE_IMAGES" ]; then
-    touch $RANCHER_REMOTE_IMAGES
+if [ "$(uname)" = "Linux" ]; then
+    OTHER_LINKFLAGS="-extldflags -static -s"
 fi
 
-curl -fL -o "${RANCHER_REMOTE_IMAGES}" "${RANCHER_IMAGE_URL}"
+CGO_ENABLED=0 go build -ldflags "$OTHER_LINKFLAGS" -o bin/harvester-installer .
 
-while IFS= read -r img || [ -n "$img" ]
-do
-  while IFS= read -r img_rq || [ -n "$img_rq" ]
-  do
-    if [[ $img == "$img_rq"* ]]; then
-      echo "$img" >> ${image_list_file}
-    fi
-  done < "$RANCHER_IMAGES"
-done < "$RANCHER_REMOTE_IMAGES"
-echo "Done adding rancher images"
-
-# add cert-manager image list
-CERT_MANAGER_IMAGES=scripts/images/cert-manager-images.txt
-
-while IFS= read -r img || [ -n "$img" ]
-do
-  echo "${img}${CERT_MANAGER_VERSION}">>${image_list_file}
-done < "$CERT_MANAGER_IMAGES"
-
-# format image list
-awk -F ':' '{if($2==""){print $1":latest"}else{print $0}}' "${image_list_file}" | \
-awk -F '/' '{if(NF==3){print $0} else if(NF==2){print "docker.io/"$0}else if(NF=1){print "docker.io/library/"$0}}' >"${image_list_file}.tmp"
-
-# clean image list
-sort -u "${image_list_file}.tmp" | \
-grep -Ev "local-path-provisioner|library-traefik|klipper-lb" >"${image_list_file}"
-
-output_image_tar_file="k3os/images/70-iso/harvester-images.tar"
-if [ -z "${HARVESTER_INSTALLER_OFFLINE_BUILD}" ] && [ ! -f $output_image_tar_file.zst ]; then
-  images=$(cat "${image_list_file}")
-  echo "${images}" | while read -r image
-  do
-    echo "=> pulling ${image}"
-    ctr images pull "${image}" > /dev/null 2>&1
-  done
-  echo "${images}" | xargs -r ctr images export ${output_image_tar_file}
-  zstd --rm ${output_image_tar_file} -o ${output_image_tar_file}.zst
-fi
-
-# get harvester version
-pushd ${harvester_path}
-source scripts/version
-export HARVESTER_VERSION=$VERSION
-popd
-
-# Remaster k3os
-cd k3os
-# Update vendors
-export GO111MODULE=on
-go mod edit -replace=github.com/nsf/termbox-go=github.com/Harvester/termbox-go@v1.1.1-0.20210318083914-8ab92204a400
-go mod edit -replace=github.com/harvester/harvester-installer=../
-go get
-go mod vendor
-# make ISO
-cd scripts
-./default
-
-# get artifacts
-artifacts_dir="../../dist/artifacts"
-mkdir -p "${artifacts_dir}"
-mv ../dist/artifacts/* "${artifacts_dir}"
-
-# rename artifacts
-find "${artifacts_dir}"  \( -name '*.iso' -or -name 'k3os-vmlinuz-*' -or -name 'k3os-initrd-*' \) -type f -print0 |
-  while IFS= read -r -d '' file; do
-      mv "${file}" "${file/k3os/harvester}"
-  done
+# Copy to harvester package folder
+mkdir -p ${PACKAGE_HARVESTER_OS_DIR}/files/usr/bin
+install bin/harvester-installer ${PACKAGE_HARVESTER_OS_DIR}/files/usr/bin/

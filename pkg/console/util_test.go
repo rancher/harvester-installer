@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/harvester/harvester-installer/pkg/config"
 	"github.com/harvester/harvester-installer/pkg/util"
 )
 
@@ -71,13 +70,13 @@ func TestGetFormattedServerURL(t *testing.T) {
 		{
 			Name:   "ip",
 			input:  "1.2.3.4",
-			output: "https://1.2.3.4:6443",
+			output: "https://1.2.3.4:8443",
 			err:    nil,
 		},
 		{
 			Name:   "domain name",
 			input:  "example.org",
-			output: "https://example.org:6443",
+			output: "https://example.org:8443",
 			err:    nil,
 		},
 		{
@@ -113,61 +112,27 @@ func TestF(t *testing.T) {
 	}
 }
 
-func TestGetServerURLFromEnvData(t *testing.T) {
+func TestGetServerURLFromRancherdConfig(t *testing.T) {
 	testCases := []struct {
 		input []byte
 		url   string
 		err   error
 	}{
 		{
-			input: []byte("K3S_CLUSTER_SECRET=abc\nK3S_URL=https://172.0.0.1:6443"),
-			url:   "https://172.0.0.1:8443",
+			input: []byte("role: cluster-init\nkubernetesVersion: v1.21.2+rke2r1"),
+			url:   "",
 			err:   nil,
 		},
 		{
-			input: []byte("K3S_CLUSTER_SECRET=abc\nK3S_URL=https://172.0.0.1:6443\nK3S_NODE_NAME=abc"),
+			input: []byte("role: agent\nkubernetesVersion: v1.21.2+rke2r1\nserver: https://172.0.0.1:8443"),
 			url:   "https://172.0.0.1:8443",
 			err:   nil,
 		},
 	}
 
 	for _, testCase := range testCases {
-		url, err := getServerURLFromEnvData(testCase.input)
+		url, err := getServerURLFromRancherdConfig(testCase.input)
 		assert.Equal(t, testCase.url, url)
 		assert.Equal(t, testCase.err, err)
-	}
-}
-
-func TestToCloudConfig(t *testing.T) {
-	testCases := []struct {
-		name       string
-		file       string
-		resultFile string
-	}{
-		{
-			name:       "convert create config",
-			file:       "create.yaml",
-			resultFile: "create-cc.yaml",
-		},
-		{
-			name:       "convert join config",
-			file:       "join.yaml",
-			resultFile: "join-cc.yaml",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			cfg, err := config.LoadHarvesterConfig(util.LoadFixture(t, testCase.file))
-			if err != nil {
-				t.Fatalf("fail to load %q", testCase.file)
-			}
-			expected, err := util.LoadCloudConfig(util.LoadFixture(t, testCase.resultFile))
-			if err != nil {
-				t.Fatalf("fail to load %q", testCase.resultFile)
-			}
-			cloudConfig, err := toCloudConfig(cfg)
-			assert.Equal(t, expected, cloudConfig)
-			assert.Equal(t, nil, err)
-		})
 	}
 }

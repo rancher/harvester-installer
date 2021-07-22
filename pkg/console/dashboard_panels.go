@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"github.com/jroimartin/gocui"
 	"github.com/sirupsen/logrus"
 
+	"github.com/harvester/harvester-installer/pkg/config"
 	"github.com/harvester/harvester-installer/pkg/util"
 	"github.com/harvester/harvester-installer/pkg/version"
 	"github.com/harvester/harvester-installer/pkg/widgets"
@@ -174,7 +174,7 @@ func validateAdminPassword(passwd string) bool {
 }
 
 func initState() error {
-	envFile := "/etc/rancher/k3s/k3s-service.env"
+	envFile := config.RancherdConfigFile
 	if _, err := os.Stat(envFile); os.IsNotExist(err) {
 		return err
 	}
@@ -182,13 +182,13 @@ func initState() error {
 	if err != nil {
 		return err
 	}
-	serverURL, err := getServerURLFromEnvData(content)
+	serverURL, err := getServerURLFromRancherdConfig(content)
 	if err != nil {
 		return err
 	}
 
 	if serverURL != "" {
-		os.Setenv("KUBECONFIG", "/var/lib/rancher/k3s/agent/kubelet.kubeconfig")
+		os.Setenv("KUBECONFIG", "/var/lib/rancher/rke2/agent/kubelet.kubeconfig")
 	} else {
 		current.firstHost = true
 	}
@@ -200,7 +200,7 @@ func syncManagementURL(ctx context.Context, g *gocui.Gui) {
 	// sync url at the beginning
 	doSyncManagementURL(g)
 
-	syncDuration := 5 * time.Second
+	syncDuration := 30 * time.Second
 	ticker := time.NewTicker(syncDuration)
 	go func() {
 		<-ctx.Done()
@@ -227,23 +227,6 @@ func doSyncManagementURL(g *gocui.Gui) {
 	})
 }
 
-func getInterfaceIP(name string) (net.IP, error) {
-	i, err := net.InterfaceByName(name)
-	if err != nil {
-		return nil, err
-	}
-	addrList, err := i.Addrs()
-	if err != nil {
-		return nil, err
-	}
-	for _, addr := range addrList {
-		if ipNet, ok := addr.(*net.IPNet); ok {
-			return ipNet.IP.To4(), nil
-		}
-	}
-	return nil, nil
-}
-
 func getFirstReadyMasterIP() string {
 	// get first ready master node's internal ip
 	cmd := exec.Command("/bin/sh", "-c", `kubectl get no -l 'node-role.kubernetes.io/master=true' --sort-by='.metadata.creationTimestamp' \
@@ -259,23 +242,11 @@ func getFirstReadyMasterIP() string {
 	return outStr
 }
 
-func getManagementNIC() string {
-	cmd := exec.Command("/bin/sh", "-c", `yq eval '.k3os.k3sArgs[]' /k3os/system/config.yaml | sed -n '/--flannel-iface/ {n;p}' | xargs echo -n`)
-	cmd.Env = os.Environ()
-	output, err := cmd.Output()
-	outStr := string(output)
-	if err != nil {
-		logrus.Error(err, outStr)
-		return ""
-	}
-	return outStr
-}
-
 func syncHarvesterStatus(ctx context.Context, g *gocui.Gui) {
 	// sync status at the beginning
 	doSyncHarvesterStatus(g)
 
-	syncDuration := 5 * time.Second
+	syncDuration := 30 * time.Second
 	ticker := time.NewTicker(syncDuration)
 	go func() {
 		<-ctx.Done()
@@ -315,9 +286,9 @@ func k8sIsReady() bool {
 }
 
 func chartIsInstalled() bool {
-	cmd := exec.Command("/bin/sh", "-c", `kubectl -n kube-system get job helm-install-harvester -o jsonpath='{.status.succeeded}'`)
+	cmd := exec.Command("/bin/sh", "-c", `kubectl -n fleet-local get ManagedChart harvester -o jsonpath='{.status.conditions}' | jq 'map(select(.type == "Processed" and .status == "True")) | length'`)
 	cmd.Env = os.Environ()
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	outStr := string(output)
 	if err != nil {
 		logrus.Error(err, outStr)
@@ -326,13 +297,13 @@ func chartIsInstalled() bool {
 	if len(outStr) == 0 {
 		return false
 	}
-	succeeded, err := strconv.Atoi(outStr)
+	processed, err := strconv.Atoi(strings.Trim(outStr, "\n"))
 	if err != nil {
 		logrus.Error(err, outStr)
 		return false
 	}
 
-	return succeeded >= 1
+	return processed >= 1
 }
 
 func isPodReady(namespace, labelSelector string) bool {

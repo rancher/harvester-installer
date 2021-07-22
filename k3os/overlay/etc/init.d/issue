@@ -1,8 +1,0 @@
-#!/sbin/openrc-run
-
-depend() {
-    use network-online
-}
-
-name="issue"
-command="/usr/sbin/update-issue"
