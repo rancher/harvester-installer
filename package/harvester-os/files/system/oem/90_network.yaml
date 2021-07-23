@@ -1,0 +1,9 @@
+name: "Bring up interface"
+stages:
+  initramfs:
+    - commands:
+      - |
+        for i in /sys/class/net/eth*; do
+          [ -e $i ] || continue
+          ip link set $(basename $i) up;
+        done
