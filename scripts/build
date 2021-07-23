@@ -13,6 +13,7 @@ K3S_IMAGE_URL=https://raw.githubusercontent.com/rancher/k3s/${K3S_VERSION}/scrip
 RANCHER_VERSION=2.5.7
 RANCHER_IMAGE_URL=https://github.com/rancher/rancher/releases/download/v{$RANCHER_VERSION}/rancher-images.txt
 CERT_MANAGER_VERSION=v1.2.0
+MONITORING_VERSION=14.5.100
 
 # Prepare Harvester chart
 mkdir -p k3os/images/70-iso/charts
@@ -45,6 +46,24 @@ tar zxvf k3os/images/70-iso/charts/cert-manager-*.tgz >/dev/null
 # Prepare cert-manager manifests
 CERT_MANAGER_CHART=$(ls k3os/images/70-iso/charts/cert* | xargs basename)
 sed -i 's/$CERT_MANAGER_CHART/'$CERT_MANAGER_CHART'/' manifests/cert-manager.yaml
+
+# Prepare the monitoring chart
+helm pull https://charts.rancher.io/assets/rancher-monitoring/rancher-monitoring-${MONITORING_VERSION}.tgz -d k3os/images/70-iso/charts
+
+# chart sanity check
+tar zxvf k3os/images/70-iso/charts/rancher-monitoring-*.tgz >/dev/null
+
+# Prepare the monitoring-crd chart
+helm pull https://charts.rancher.io/assets/rancher-monitoring/rancher-monitoring-crd-${MONITORING_VERSION}.tgz -d k3os/images/70-iso/charts
+
+# chart sanity check
+tar zxvf k3os/images/70-iso/charts/rancher-monitoring-crd-*.tgz >/dev/null
+
+# Prepare monitoring manifests
+MONITORING_CHART=$(ls k3os/images/70-iso/charts/rancher-monitoring* | xargs basename)
+MONITORING_CRD_CHART=$(ls k3os/images/70-iso/charts/rancher-monitoring-crd* | xargs basename)
+sed -i 's/$MONITORING_CRD_CHART/'$MONITORING_CRD_CHART'/' manifests/graph-monitoring.yaml
+sed -i 's/$MONITORING_CHART/'$MONITORING_CHART'/' manifests/graph-monitoring.yaml
 
 # Copy manifests
 cp -r manifests k3os/images/70-iso/
@@ -110,6 +129,14 @@ while IFS= read -r img || [ -n "$img" ]
 do
   echo "${img}${CERT_MANAGER_VERSION}">>${image_list_file}
 done < "$CERT_MANAGER_IMAGES"
+
+# add monitoring image list
+MONITORING_IMAGES=scripts/images/monitoring.txt
+
+while IFS= read -r img || [ -n "$img" ]
+do
+  echo "${img}">>${image_list_file}
+done < "$MONITORING_IMAGES"
 
 # format image list
 awk -F ':' '{if($2==""){print $1":latest"}else{print $0}}' "${image_list_file}" | \

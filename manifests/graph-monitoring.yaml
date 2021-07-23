@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: harvester-monitoring
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: monitoring-crd
+  namespace: kube-system
+spec:
+  chart: https://%{KUBERNETES_API}%/static/charts/$MONITORING_CRD_CHART
+  targetNamespace: harvester-monitoring
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: monitoring
+  namespace: kube-system
+spec:
+  chart: https://%{KUBERNETES_API}%/static/charts/$MONITORING_CHART
+  targetNamespace: harvester-monitoring
+  set:
+    alertmanager.enabled: "false"
+    coreDns.enabled: "false"
+    defaultRules.create: "false"
+    global.rbac.userRoles.create: "false"
+    grafana.enabled: "false"
+    kubeApiServer.enabled: "false"
+    kubeStateMetrics.enabled: "false"
+    kubelet.enabled: "false"
+    nameOverride: "monitoring"
+    namespaceOverride: "harvester-monitoring"
+    nodeExporter.enabled: "false"
+    prometheus-adapter.enabled: "false"
