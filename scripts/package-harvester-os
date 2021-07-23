@@ -17,9 +17,6 @@ docker build --pull \
 	--build-arg CACHEBUST="$(date)" \
 	-t ${HARVESTER_OS_IMAGE} .
 
-mkdir -p build
-rm -f build/iso-container
-docker run --pull always -v /var/run:/var/run --cidfile=build/iso-container ${BASE_OS_IMAGE}-tools makeiso ${HARVESTER_OS_IMAGE}
-docker cp $(cat build/iso-container):/output.iso ${DIST_DIR}/harvester.iso
-docker rm -fv $(cat build/iso-container)
-rm -f build/iso-container
+# build ISO
+[ -d iso ] && yq e ".overlay.isoimage = \"$(pwd)/iso\"" iso.yaml -i
+luet-makeiso iso.yaml --image "${HARVESTER_OS_IMAGE}" --output ${DIST_DIR}/harvester

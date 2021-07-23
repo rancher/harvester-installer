@@ -212,38 +212,21 @@ get_url()
     esac
 }
 
-do_copy()
+preload_rke2_images()
 {
-
-    echo "Copying cOS.."
-
-    PRELOAD_DIR="/usr/share/rancher/preload"
-
-    rsync -aqAX --exclude='mnt' --exclude='proc' --exclude='sys' --exclude='dev' --exclude='tmp' --exclude=${PRELOAD_DIR}/images ${DISTRO}/ ${TARGET}
-     if [ -n "$COS_INSTALL_CONFIG_URL" ]; then
-        OEM=${TARGET}/oem/99_custom.yaml
-        get_url "$COS_INSTALL_CONFIG_URL" $OEM
-        chmod 600 ${OEM}
+    preload=$(ls /run/initramfs/live/bundle/harvester/images/*.tar.zst 2>/dev/null || true)
+    if [ -z "$preload" ]; then
+        return
     fi
-    mkdir -p $TARGET/usr/local/cloud-config
-    chmod 640 $TARGET/usr/local/cloud-config
 
-    mkdir -p $TARGET/$PRELOAD_DIR
-    mount --bind $PRELOAD_DIR $TARGET/$PRELOAD_DIR
-
-    # Bind mount persistent folder to preload images
-    BIND_MOUNTS=("var/lib/rancher")
-
-    for i in ${BIND_MOUNTS[@]}; do
-        mkdir -p $TARGET/$i
-        mkdir -p $TARGET/usr/local/.ros-state/$i 
-        mount -o bind $TARGET/usr/local/.ros-state/$i $TARGET/$i
-    done
+    RKE2_IMAGES_DIR="/var/lib/rancher/rke2/agent/images"
+    mkdir -p $TARGET/$RKE2_IMAGES_DIR
+    mount --bind /run/initramfs/live/bundle/harvester/images $TARGET/$RKE2_IMAGES_DIR
 
     cd $TARGET
-
     mkdir dev
     mkdir proc
+    mkdir tmp
     mount --bind /dev dev
     mount --bind /proc proc
 
@@ -251,13 +234,6 @@ do_copy()
     chroot . /bin/bash <<"EOF"
       set -e
 
-      PRELOAD_IMAGE_DIR=/usr/share/rancher/preload/images
-      # Start RKE2 set up data dir and bring up containerd
-      mkdir -p /var/lib/rancher/rke2/agent/images
-      cp $PRELOAD_IMAGE_DIR/rke2-*.zst  /var/lib/rancher/rke2/agent/images
-      cp $PRELOAD_IMAGE_DIR/rancherd-bootstrap-images.tar.zst  /var/lib/rancher/rke2/agent/images
-      cp $PRELOAD_IMAGE_DIR/rancherd-images.tar.zst  /var/lib/rancher/rke2/agent/images
-      cp $PRELOAD_IMAGE_DIR/harvester-repo-images.tar.zst  /var/lib/rancher/rke2/agent/images
       rke2 server &> /rke2.log &
 
       export PATH=/var/lib/rancher/rke2/bin:$PATH
@@ -269,17 +245,9 @@ do_copy()
         sleep 1
       done
 
-      INSTALL_TMP=/usr/local/.install_tmp
-      mkdir -p $INSTALL_TMP
-      trap "rm -rf $INSTALL_TMP" EXIT
-
-      # import images
-      zstd -d $PRELOAD_IMAGE_DIR/harvester-images.tar.zst -o $INSTALL_TMP/harvester-images.tar > /dev/null
-      ctr -n k8s.io images import $INSTALL_TMP/harvester-images.tar
-
       # make sure all preloading images are ready
-      for i in $PRELOAD_IMAGE_DIR/*.txt; do
-        ctr-check-images.sh $i
+      for i in /var/lib/rancher/rke2/agent/images/*.txt; do
+        stdbuf -oL ctr-check-images.sh $i
       done
 
       # stop containerd
@@ -288,25 +256,59 @@ do_copy()
 
       rm -rf /var/lib/rancher/rke2/server
       rm -rf /var/lib/rancher/rke2/agent/pod-manifests/*
-      rm -f /var/lib/rancher/rke2/agent/images/*.zst
-
-      # rancherd bootstrap images
-      mkdir -p /var/lib/rancher/agent/images
-      cp $PRELOAD_IMAGE_DIR/rancherd-bootstrap-images.tar.zst /var/lib/rancher/agent/images
-
-      exit
 EOF
 
     umount dev proc
-    rm -rf dev proc
+    rm -rf dev proc tmp
+    cd - &> /dev/null
+    umount ${TARGET}/${RKE2_IMAGES_DIR}
+}
+
+preload_rancherd_images()
+{
+    preload=$(ls /run/initramfs/live/bundle/rancherd/images/*.tar.zst 2>/dev/null || true)
+    if [ -z "$preload" ]; then
+        return
+    fi
+
+    mkdir -p $TARGET/var/lib/rancher/agent/images
+    cp /run/initramfs/live/bundle/rancherd/images/* $TARGET/var/lib/rancher/agent/images
+}
+
+do_preload()
+{
+    # Bind mount persistent folder to preload images
+    BIND_MOUNTS=("var/lib/rancher")
+
     for i in ${BIND_MOUNTS[@]}; do
-        umount $i
+        mkdir -p $TARGET/$i
+        mkdir -p $TARGET/usr/local/.ros-state/$i
+        mount -o bind $TARGET/usr/local/.ros-state/$i $TARGET/$i
     done
 
-    umount ${TARGET}/${PRELOAD_DIR}
+    preload_rancherd_images
+    preload_rke2_images
 
-    # do not occupy the target folder
-    cd - &> /dev/null
+    for i in ${BIND_MOUNTS[@]}; do
+        umount $TARGET/$i
+    done
+}
+
+do_copy()
+{
+
+    echo "Copying cOS.."
+
+    rsync -aqAX --exclude='mnt' --exclude='proc' --exclude='sys' --exclude='dev' --exclude='tmp' ${DISTRO}/ ${TARGET}
+     if [ -n "$COS_INSTALL_CONFIG_URL" ]; then
+        OEM=${TARGET}/oem/99_custom.yaml
+        get_url "$COS_INSTALL_CONFIG_URL" $OEM
+        chmod 600 ${OEM}
+    fi
+    mkdir -p $TARGET/usr/local/cloud-config
+    chmod 640 $TARGET/usr/local/cloud-config
+
+    do_preload
 
     OEM=${TARGET}/oem/99_env.yaml
     cat > $OEM <<"EOF"

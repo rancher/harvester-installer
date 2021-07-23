@@ -4,7 +4,10 @@ TOP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 SCRIPTS_DIR="${TOP_DIR}/scripts"
 PACKAGE_HARVESTER_OS_DIR="${TOP_DIR}/package/harvester-os"
 PACKAGE_HARVESTER_REPO_DIR="${TOP_DIR}/package/harvester-repo"
-IMAGES_DIR="${PACKAGE_HARVESTER_OS_DIR}/images"
+BUNDLE_DIR="${PACKAGE_HARVESTER_OS_DIR}/iso/bundle"
+IMAGES_DIR="${BUNDLE_DIR}/harvester/images"
+
+mkdir -p ${IMAGES_DIR}
 
 source ${SCRIPTS_DIR}/version
 cd ${PACKAGE_HARVESTER_REPO_DIR}

@@ -11,10 +11,13 @@ cd ${TOP_DIR}
 source ${SCRIPTS_DIR}/version
 
 CHARTS_DIR="${PACKAGE_HARVESTER_REPO_DIR}/charts"
-IMAGES_DIR="${PACKAGE_HARVESTER_OS_DIR}/images"
+BUNDLE_DIR="${PACKAGE_HARVESTER_OS_DIR}/iso/bundle"
+IMAGES_DIR="${BUNDLE_DIR}/harvester/images"
+RANCHERD_IMAGES_DIR="${BUNDLE_DIR}/rancherd/images"
 
 mkdir -p ${CHARTS_DIR}
 mkdir -p ${IMAGES_DIR}
+mkdir -p ${RANCHERD_IMAGES_DIR}
 
 # Prepare Harvester chart
 harvester_path=../harvester
@@ -30,22 +33,21 @@ helm repo index ${CHARTS_DIR}
 harvester_chart_version=$(yq e .version ${harvester_chart_path}/Chart.yaml --exit-status)
 sed -i "s/\$HARVESTER_CHART_VERSION/${harvester_chart_version}/" ${PACKAGE_HARVESTER_OS_DIR}/files/usr/share/rancher/rancherd/config.yaml.d/91-harvester-bootstrap.yaml
 
-if [ -e /images ]; then
-  cp /images/* ${IMAGES_DIR}
-  ls ${IMAGES_DIR}
-  exit 0
+if [ -n "$HARVESTER_INSTALLER_OFFLINE_BUILD" -a -e /bundle ]; then
+ cp -rf /bundle/* ${BUNDLE_DIR}/
+ exit 0
 fi
 
 # Offline images
 
 # Rancherd bootstrap images
 # FIXME(kiefer): most images are still under devlopment
-xargs -n1 -t docker image pull --quiet << EOF > ${IMAGES_DIR}/rancherd-bootstrap-images.txt
+xargs -n1 -t docker image pull --quiet << EOF > ${RANCHERD_IMAGES_DIR}/rancherd-bootstrap-images.txt
   ibuildthecloud/system-agent-installer-rancher:dev
   rancher/system-agent-installer-rke2:v1.21.2-rke2r1
 EOF
-docker image save -o ${IMAGES_DIR}/rancherd-bootstrap-images.tar $(<${IMAGES_DIR}/rancherd-bootstrap-images.txt)
-zstd --rm ${IMAGES_DIR}/rancherd-bootstrap-images.tar -o ${IMAGES_DIR}/rancherd-bootstrap-images.tar.zst
+docker image save -o ${RANCHERD_IMAGES_DIR}/rancherd-bootstrap-images.tar $(<${RANCHERD_IMAGES_DIR}/rancherd-bootstrap-images.txt)
+zstd --rm ${RANCHERD_IMAGES_DIR}/rancherd-bootstrap-images.tar -o ${RANCHERD_IMAGES_DIR}/rancherd-bootstrap-images.tar.zst
 
 
 # Images needed during cluster-init stage.
@@ -62,9 +64,20 @@ xargs -n1 -t docker image pull --quiet << EOF > ${IMAGES_DIR}/rancherd-images.tx
   rancher/fleet:v0.3.6-rc4
   rancher/fleet-agent:v0.3.6-rc4
   rancher/system-upgrade-controller:v0.7.0
+  rancher/system-upgrade-controller:v0.7.1
 EOF
 docker image save -o ${IMAGES_DIR}/rancherd-images.tar $(<${IMAGES_DIR}/rancherd-images.txt)
 zstd --rm ${IMAGES_DIR}/rancherd-images.tar -o ${IMAGES_DIR}/rancherd-images.tar.zst
+
+
+# RKE2 images
+RKE2_VERSION="v1.21.2+rke2r1"
+RKE2_IMAGES_URL="https://github.com/rancher/rke2/releases/download/${RKE2_VERSION}"
+curl -sfL "${RKE2_IMAGES_URL}/rke2-images.linux-amd64.txt" -o "${IMAGES_DIR}/rke2-images.linux-amd64.txt"
+curl -sfL "${RKE2_IMAGES_URL}/rke2-images.linux-amd64.tar.zst" -o "${IMAGES_DIR}/rke2-images.linux-amd64.tar.zst"
+curl -sfL "${RKE2_IMAGES_URL}/rke2-images-multus.linux-amd64.tar.zst" -o "${IMAGES_DIR}/rke2-images-multus.linux-amd64.tar.zst"
+curl -sfL "${RKE2_IMAGES_URL}/rke2-images-multus.linux-amd64.txt" -o "${IMAGES_DIR}/rke2-images-multus.linux-amd64.txt"
+
 
 # Harvester images: get image list from harvester chart's values file
 image_list_file='harvester-images.txt'
@@ -111,9 +124,8 @@ if [ -z "${HARVESTER_INSTALLER_OFFLINE_BUILD}" ] && [ ! -f $output_image_tar_fil
   echo "${images}" | while read -r image
   do
     echo "=> pulling ${image}"
-    ctr images pull "${image}" > /dev/null 2>&1
+    docker pull "${image}" > /dev/null 2>&1
   done
-  echo "${images}" | xargs -r ctr images export ${output_image_tar_file}
+  docker image save -o ${output_image_tar_file} $(<${IMAGES_DIR}/${image_list_file})
   zstd --rm ${output_image_tar_file} -o ${output_image_tar_file}.zst
 fi
-

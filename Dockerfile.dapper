@@ -13,7 +13,7 @@ ENV HARVESTER_INSTALLER_OFFLINE_BUILD=$HARVESTER_INSTALLER_OFFLINE_BUILD
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
 
-RUN apk -U add bash git gcc musl-dev docker vim less file curl wget ca-certificates zstd make
+RUN apk -U add bash git gcc musl-dev docker vim less file curl wget ca-certificates zstd squashfs-tools xorriso
 RUN apk add yq --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community
 RUN go get -u golang.org/x/lint/golint
 RUN go get -u golang.org/x/tools/cmd/goimports
@@ -26,6 +26,10 @@ ENV HELM_URL=https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz
 RUN mkdir /usr/tmp && \
     curl ${HELM_URL} | tar xvzf - --strip-components=1 -C /usr/tmp/ && \
     mv /usr/tmp/helm /usr/bin/helm
+
+# makeiso
+RUN wget --quiet https://github.com/mudler/luet/releases/download/0.17.0/luet-0.17.0-linux-amd64 -O /usr/bin/luet && chmod +x /usr/bin/luet
+RUN wget --quiet https://github.com/mudler/luet-makeiso/releases/download/0.3.3/luet-makeiso-0.3.3-linux-amd64 -O /usr/bin/luet-makeiso && chmod +x /usr/bin/luet-makeiso
 
 ENV GO111MODULE off
 ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS
